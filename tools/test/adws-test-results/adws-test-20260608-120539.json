@@ -1,0 +1,263 @@
+﻿{
+    "Server":  "192.168.141.10",
+    "StartedAt":  "2026-06-08T12:05:40.6555838+02:00",
+    "Total":  28,
+    "Pass":  26,
+    "Fail":  2,
+    "LogFile":  ".\\adws-test-results\\adws-test-20260608-120539.log",
+    "ResultsFile":  ".\\adws-test-results\\adws-test-20260608-120539.json",
+    "Tests":  [
+                  {
+                      "Name":  "Get-ADRootDSE",
+                      "Category":  "Connectivity",
+                      "StartTime":  "2026-06-08T12:05:40.6555838+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  571,
+                      "Output":  "configurationNamingContext    : CN=Configuration,DC=samba,DC=local\r\ncurrentTime                   : 08/06/2026 12:05:40\r\ndefaultNamingContext          : DC=samba,DC=local\r\ndnsHostName                   : debian.samba.local\r\ndomainControllerFunctionality : Windows2008R2\r\ndomainFunctionality           : Windows2008R2Domain\r\ndsServiceName                 : CN=NTDS Settings,CN=DEBIAN,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configurat\r\n                                ion,DC=samba,DC=local\r\nforestFunctionality           : Windows2008R2Forest\r\nhighestCommittedUSN           : 22038\r\nisGlobalCatalogReady          : {true}\r\nisSynchronized                : {true}\r\nldapServiceName               : samba.local:debian$@SAMBA.LOCAL\r\nmsDS-PortLDAP                 : {389}\r\nmsDS-PortSSL                  : {636}\r\nnamingContexts                : {DC=samba,DC=local, CN=Configuration,DC=samba,DC=local, \r\n                                CN=Schema,CN=Configuration,DC=samba,DC=local, DC=DomainDnsZones,DC=samba,DC=local...}\r\nrootDomainNamingContext       : DC=samba,DC=local\r\nschemaNamingContext           : CN=Schema,CN=Configuration,DC=samba,DC=local\r\nserverName                    : CN=DEBIAN,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=samba,DC=l\r\n                                ocal\r\nsubschemaSubentry             : CN=Aggregate,CN=Schema,CN=Configuration,DC=samba,DC=local\r\nsupportedCapabilities         : {1.2.840.113556.1.4.800 (LDAP_CAP_ACTIVE_DIRECTORY_OID), 1.2.840.113556.1.4.1670 \r\n                                (LDAP_CAP_ACTIVE_DIRECTORY_V51_OID), 1.2.840.113556.1.4.1791 \r\n                                (LDAP_CAP_ACTIVE_DIRECTORY_LDAP_INTEG_OID), 1.2.840.113556.1.4.1935 \r\n                                (LDAP_CAP_ACTIVE_DIRECTORY_V61_OID)...}\r\nsupportedControl              : {1.2.840.113556.1.4.1413 (LDAP_SERVER_PERMISSIVE_MODIFY_OID), 1.2.840.113556.1.4.1413 \r\n                                (LDAP_SERVER_PERMISSIVE_MODIFY_OID), 1.2.840.113556.1.4.1413 \r\n                                (LDAP_SERVER_PERMISSIVE_MODIFY_OID), 1.2.840.113556.1.4.1413 \r\n                                (LDAP_SERVER_PERMISSIVE_MODIFY_OID)...}\r\nsupportedLDAPVersion          : {2, 3}",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADDomain",
+                      "Category":  "Connectivity",
+                      "StartTime":  "2026-06-08T12:05:41.2423516+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  472,
+                      "Output":  "AllowedDNSSuffixes                 : {}\r\nChildDomains                       : {}\r\nComputersContainer                 : CN=Computers,DC=samba,DC=local\r\nDeletedObjectsContainer            : CN=Deleted Objects,DC=samba,DC=local\r\nDistinguishedName                  : DC=samba,DC=local\r\nDNSRoot                            : samba.local\r\nDomainControllersContainer         : OU=Domain Controllers,DC=samba,DC=local\r\nDomainMode                         : Windows2008R2Domain\r\nDomainSID                          : S-1-5-21-1724976271-2482711702-3578161\r\nForeignSecurityPrincipalsContainer : CN=ForeignSecurityPrincipals,DC=samba,DC=local\r\nForest                             : samba.local\r\nInfrastructureMaster               : debian.samba.local\r\nLastLogonReplicationInterval       : \r\nLinkedGroupPolicyObjects           : {}\r\nLostAndFoundContainer              : CN=LostAndFound,DC=samba,DC=local\r\nManagedBy                          : \r\nName                               : samba\r\nNetBIOSName                        : SAMBA\r\nObjectClass                        : domainDNS\r\nObjectGUID                         : f2eb78dc-c168-49f7-a39d-65706eca2318\r\nParentDomain                       : \r\nPDCEmulator                        : debian.samba.local\r\nPublicKeyRequiredPasswordRolling   : \r\nQuotasContainer                    : CN=NTDS Quotas,DC=samba,DC=local\r\nReadOnlyReplicaDirectoryServers    : {}\r\nReplicaDirectoryServers            : {debian.samba.local}\r\nRIDMaster                          : debian.samba.local\r\nSubordinateReferences              : {}\r\nSystemsContainer                   : CN=System,DC=samba,DC=local\r\nUsersContainer                     : CN=Users,DC=samba,DC=local",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADForest",
+                      "Category":  "Connectivity",
+                      "StartTime":  "2026-06-08T12:05:41.7214219+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  448,
+                      "Output":  "ApplicationPartitions : {}\r\nCrossForestReferences : {}\r\nDomainNamingMaster    : debian.samba.local\r\nDomains               : {samba.local}\r\nForestMode            : Windows2008R2Forest\r\nGlobalCatalogs        : {debian.samba.local}\r\nName                  : samba.local\r\nPartitionsContainer   : CN=Partitions,CN=Configuration,DC=samba,DC=local\r\nRootDomain            : samba.local\r\nSchemaMaster          : debian.samba.local\r\nSites                 : {}\r\nSPNSuffixes           : {}\r\nUPNSuffixes           : {}",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADDomainController",
+                      "Category":  "Connectivity",
+                      "StartTime":  "2026-06-08T12:05:42.1784376+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  450,
+                      "Output":  "ComputerObjectDN           : \r\nDefaultPartition           : DC=samba,DC=local\r\nDomain                     : samba.local\r\nEnabled                    : True\r\nForest                     : samba.local\r\nHostName                   : debian.samba.local\r\nInvocationId               : 7ef88698-1a8b-428d-abc0-e7d60e327b37\r\nIPv4Address                : 192.168.141.10\r\nIPv6Address                : \r\nIsGlobalCatalog            : True\r\nIsReadOnly                 : False\r\nLdapPort                   : 389\r\nName                       : debian\r\nNTDSSettingsObjectDN       : CN=NTDS Settings,CN=DEBIAN,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration\r\n                             ,DC=samba,DC=local\r\nOperatingSystem            : \r\nOperatingSystemHotfix      : \r\nOperatingSystemServicePack : \r\nOperatingSystemVersion     : \r\nOperationMasterRoles       : {}\r\nPartitions                 : {}\r\nServerObjectDN             : CN=DEBIAN,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=samba,DC=loca\r\n                             l\r\nServerObjectGuid           : 3d11a7b3-48df-4178-9f45-ed98f95ebe86\r\nSite                       : Default-First-Site-Name\r\nSslPort                    : 636",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADUser Administrator -Properties *",
+                      "Category":  "Read",
+                      "StartTime":  "2026-06-08T12:05:42.6425015+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  313,
+                      "Output":  "AccountExpirationDate                : \r\naccountExpires                       : 9223372036854775807\r\nAccountLockoutTime                   : \r\nAccountNotDelegated                  : False\r\nAllowReversiblePasswordEncryption    : False\r\nAuthenticationPolicy                 : {}\r\nAuthenticationPolicySilo             : {}\r\nBadLogonCount                        : 0\r\nbadPasswordTime                      : 0\r\nbadPwdCount                          : 0\r\nCannotChangePassword                 : False\r\nCanonicalName                        : samba.local/Users/Administrator\r\nCertificates                         : {}\r\nCity                                 : \r\nCN                                   : Administrator\r\nCompany                              : \r\nCompoundIdentitySupported            : {}\r\nCountry                              : \r\nCreated                              : 20/04/2026 14:11:30\r\ncreateTimeStamp                      : 20/04/2026 14:11:30\r\nDeleted                              : \r\nDepartment                           : \r\nDescription                          : Built-in account for administering the computer/domain\r\nDisplayName                          : \r\nDistinguishedName                    : CN=Administrator,CN=Users,DC=samba,DC=local\r\nDivision                             : \r\nDoesNotRequirePreAuth                : False\r\nEmailAddress                         : \r\nEmployeeID                           : \r\nEmployeeNumber                       : \r\nEnabled                              : True\r\nFax                                  : \r\nGivenName                            : \r\nHomeDirectory                        : \r\nHomedirRequired                      : False\r\nHomeDrive                            : \r\nHomePage                             : \r\nHomePhone                            : \r\nInitials                             : \r\ninstanceType                         : 4\r\nisDeleted                            : \r\nKerberosEncryptionType               : {}\r\nLastBadPasswordAttempt               : \r\nLastKnownParent                      : \r\nLastLogonDate                        : 12/05/2026 16:51:27\r\nlastLogonTimestamp                   : 134230710871224760\r\nLockedOut                            : False\r\nLogonWorkstations                    : \r\nManager                              : \r\nMemberOf                             : {CN=Domain Admins,CN=Users,DC=samba,DC=local, CN=Schema \r\n                                       Admins,CN=Users,DC=samba,DC=local, CN=Enterprise \r\n                                       Admins,CN=Users,DC=samba,DC=local, CN=Group Policy Creator \r\n                                       Owners,CN=Users,DC=samba,DC=local...}\r\nMNSLogonAccount                      : False\r\nMobilePhone                          : \r\nModified                             : 12/05/2026 16:51:27\r\nmodifyTimeStamp                      : 12/05/2026 16:51:27\r\nmsDS-User-Account-Control-Computed   : 0\r\nName                                 : Administrator\r\nnTSecurityDescriptor                 : System.DirectoryServices.ActiveDirectorySecurity\r\nObjectCategory                       : CN=Person,CN=Schema,CN=Configuration,DC=samba,DC=local\r\nObjectClass                          : user\r\nObjectGUID                           : b696d974-7f56-4155-927c-d7758f351ac0\r\nobjectSid                            : S-1-5-21-1724976271-2482711702-3578161-500\r\nOffice                               : \r\nOfficePhone                          : \r\nOrganization                         : \r\nOtherName                            : \r\nPasswordExpired                      : False\r\nPasswordLastSet                      : 12/05/2026 16:50:43\r\nPasswordNeverExpires                 : False\r\nPasswordNotRequired                  : False\r\nPOBox                                : \r\nPostalCode                           : \r\nPrimaryGroup                         : CN=Domain Users,CN=Users,DC=samba,DC=local\r\nprimaryGroupID                       : 513\r\nPrincipalsAllowedToDelegateToAccount : {}\r\nProfilePath                          : \r\nProtectedFromAccidentalDeletion      : False\r\npwdLastSet                           : 134230710436257230\r\nSamAccountName                       : Administrator\r\nScriptPath                           : \r\nsDRightsEffective                    : 15\r\nServicePrincipalNames                : {}\r\nSID                                  : S-1-5-21-1724976271-2482711702-3578161-500\r\nSIDHistory                           : {}\r\nSmartcardLogonRequired               : False\r\nState                                : \r\nStreetAddress                        : \r\nSurname                              : \r\nTitle                                : \r\nTrustedForDelegation                 : False\r\nTrustedToAuthForDelegation           : False\r\nUseDESKeyOnly                        : False\r\nuserAccountControl                   : 512\r\nuserCertificate                      : {}\r\nUserPrincipalName                    :",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADGroup \u0027Domain Admins\u0027",
+                      "Category":  "Read",
+                      "StartTime":  "2026-06-08T12:05:43.1099802+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  308,
+                      "Output":  "CanonicalName                   : samba.local/Users/Domain Admins\r\nCN                              : Domain Admins\r\nCreated                         : 20/04/2026 14:11:30\r\ncreateTimeStamp                 : 20/04/2026 14:11:30\r\nDeleted                         : \r\nDescription                     : Designated administrators of the domain\r\nDisplayName                     : \r\nDistinguishedName               : CN=Domain Admins,CN=Users,DC=samba,DC=local\r\nGroupCategory                   : Security\r\nGroupScope                      : Global\r\ngroupType                       : -2147483646\r\nHomePage                        : \r\ninstanceType                    : 4\r\nisDeleted                       : \r\nLastKnownParent                 : \r\nManagedBy                       : \r\nmember                          : {CN=Administrator,CN=Users,DC=samba,DC=local, \r\n                                  CN=adws-tester,CN=Users,DC=samba,DC=local}\r\nMemberOf                        : {CN=Denied RODC Password Replication Group,CN=Users,DC=samba,DC=local, \r\n                                  CN=Administrators,CN=Builtin,DC=samba,DC=local}\r\nMembers                         : {CN=Administrator,CN=Users,DC=samba,DC=local, \r\n                                  CN=adws-tester,CN=Users,DC=samba,DC=local}\r\nModified                        : 08/06/2026 11:00:39\r\nmodifyTimeStamp                 : 08/06/2026 11:00:39\r\nName                            : Domain Admins\r\nnTSecurityDescriptor            : System.DirectoryServices.ActiveDirectorySecurity\r\nObjectCategory                  : CN=Group,CN=Schema,CN=Configuration,DC=samba,DC=local\r\nObjectClass                     : group\r\nObjectGUID                      : ba3ee3f1-8e9a-49b5-a561-35393e637370\r\nobjectSid                       : S-1-5-21-1724976271-2482711702-3578161-512\r\nProtectedFromAccidentalDeletion : False\r\nSamAccountName                  : Domain Admins\r\nsDRightsEffective               : 15\r\nSID                             : S-1-5-21-1724976271-2482711702-3578161-512\r\nSIDHistory                      : {}",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADComputer -Filter *",
+                      "Category":  "Read",
+                      "StartTime":  "2026-06-08T12:05:43.5796554+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  354,
+                      "Output":  "DistinguishedName : CN=DEBIAN,OU=Domain Controllers,DC=samba,DC=local\r\nDNSHostName       : debian.samba.local\r\nEnabled           : True\r\nName              : DEBIAN\r\nObjectClass       : computer\r\nObjectGUID        : 7ae45639-afef-4f2b-b074-8393106ab33b\r\nSamAccountName    : DEBIAN$\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1000\r\nUserPrincipalName : \r\n\r\nDistinguishedName : CN=WINDOWS11ENTREP,CN=Computers,DC=samba,DC=local\r\nDNSHostName       : Windows11entreprisePerso.samba.local\r\nEnabled           : True\r\nName              : WINDOWS11ENTREP\r\nObjectClass       : computer\r\nObjectGUID        : a10b17aa-83c4-43f8-8346-d42692532fd6\r\nSamAccountName    : WINDOWS11ENTREP$\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1103\r\nUserPrincipalName :",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADUser -Filter * (full enumeration)",
+                      "Category":  "Enumerate",
+                      "StartTime":  "2026-06-08T12:05:44.2879312+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  327,
+                      "Output":  "User count: 5",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADUser AND filter",
+                      "Category":  "Enumerate",
+                      "StartTime":  "2026-06-08T12:05:44.6211316+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  314,
+                      "Output":  "Count\r\n-----\r\n    3",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADUser LDAPFilter (OR + bitwise NOT)",
+                      "Category":  "Enumerate",
+                      "StartTime":  "2026-06-08T12:05:44.9406977+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  301,
+                      "Output":  "Count\r\n-----\r\n    3",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADObject paged enumeration",
+                      "Category":  "Enumerate",
+                      "StartTime":  "2026-06-08T12:05:45.2468412+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  322,
+                      "Output":  "Count\r\n-----\r\n   50",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "New-ADUser adwsTest-User",
+                      "Category":  "Create",
+                      "StartTime":  "2026-06-08T12:05:45.5756409+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  920,
+                      "Output":  "DistinguishedName : CN=adwsTest-User,CN=Users,DC=samba,DC=local\r\nEnabled           : True\r\nGivenName         : \r\nName              : adwsTest-User\r\nObjectClass       : user\r\nObjectGUID        : 8cff7e83-282d-4644-be70-6d6c9ec27c83\r\nSamAccountName    : adwsTest-User\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1122\r\nSurname           : \r\nUserPrincipalName :",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Set-ADUser DisplayName + Description",
+                      "Category":  "Modify",
+                      "StartTime":  "2026-06-08T12:05:46.6606778+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  741,
+                      "Output":  "Description       : Created by test\r\nDisplayName       : ADWS Test\r\nDistinguishedName : CN=adwsTest-User,CN=Users,DC=samba,DC=local\r\nEnabled           : True\r\nGivenName         : \r\nName              : adwsTest-User\r\nObjectClass       : user\r\nObjectGUID        : 8cff7e83-282d-4644-be70-6d6c9ec27c83\r\nSamAccountName    : adwsTest-User\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1122\r\nSurname           : \r\nUserPrincipalName :",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Set-ADUser -Replace multi-attribute",
+                      "Category":  "Modify",
+                      "StartTime":  "2026-06-08T12:05:47.5753789+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  680,
+                      "Output":  "Department        : QA\r\nDistinguishedName : CN=adwsTest-User,CN=Users,DC=samba,DC=local\r\nEnabled           : True\r\nGivenName         : \r\nName              : adwsTest-User\r\nObjectClass       : user\r\nObjectGUID        : 8cff7e83-282d-4644-be70-6d6c9ec27c83\r\nSamAccountName    : adwsTest-User\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1122\r\nSurname           : \r\nTitle             : Engineer\r\nUserPrincipalName :",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Remove-ADUser adwsTest-User",
+                      "Category":  "Delete",
+                      "StartTime":  "2026-06-08T12:05:48.4179827+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  428,
+                      "Output":  "",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Create user adwsTest-Pwd",
+                      "Category":  "Setup",
+                      "StartTime":  "2026-06-08T12:05:48.8562835+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  609,
+                      "Output":  "",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Set-ADAccountPassword -Reset",
+                      "Category":  "SetPassword",
+                      "StartTime":  "2026-06-08T12:05:49.4715185+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  526,
+                      "Output":  "",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Set-ADAccountPassword (Change with old)",
+                      "Category":  "ChangePassword",
+                      "StartTime":  "2026-06-08T12:05:50.0024973+02:00",
+                      "Status":  "Fail",
+                      "DurationMs":  492,
+                      "Output":  null,
+                      "Error":  "(1, \u0027Failed to obtain remote address for the LDAP client while changing the password\u0027)"
+                  },
+                  {
+                      "Name":  "Cleanup adwsTest-Pwd",
+                      "Category":  "Cleanup",
+                      "StartTime":  "2026-06-08T12:05:50.4987029+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  395,
+                      "Output":  "",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Create group + 2 members",
+                      "Category":  "Setup",
+                      "StartTime":  "2026-06-08T12:05:50.9076288+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  1558,
+                      "Output":  "",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Add-ADGroupMember",
+                      "Category":  "GroupModify",
+                      "StartTime":  "2026-06-08T12:05:52.4704265+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  422,
+                      "Output":  "",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADGroupMember (direct)",
+                      "Category":  "GroupRead",
+                      "StartTime":  "2026-06-08T12:05:52.8972663+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  440,
+                      "Output":  "distinguishedName : CN=adwsTest-MemberA,CN=Users,DC=samba,DC=local\r\nname              : adwsTest-MemberA\r\nobjectClass       : user\r\nobjectGUID        : c91bec02-c962-42c6-918c-e0b6ed7b7cde\r\nSamAccountName    : adwsTest-MemberA\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1125\r\n\r\ndistinguishedName : CN=adwsTest-MemberB,CN=Users,DC=samba,DC=local\r\nname              : adwsTest-MemberB\r\nobjectClass       : user\r\nobjectGUID        : 7723edf1-95eb-4606-838f-7289e20aa89f\r\nSamAccountName    : adwsTest-MemberB\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1126",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADGroupMember -Recursive",
+                      "Category":  "GroupRead",
+                      "StartTime":  "2026-06-08T12:05:55.0528304+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  417,
+                      "Output":  "distinguishedName : CN=adwsTest-MemberA,CN=Users,DC=samba,DC=local\r\nname              : adwsTest-MemberA\r\nobjectClass       : user\r\nobjectGUID        : c91bec02-c962-42c6-918c-e0b6ed7b7cde\r\nSamAccountName    : adwsTest-MemberA\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1125\r\n\r\ndistinguishedName : CN=adwsTest-MemberB,CN=Users,DC=samba,DC=local\r\nname              : adwsTest-MemberB\r\nobjectClass       : user\r\nobjectGUID        : 7723edf1-95eb-4606-838f-7289e20aa89f\r\nSamAccountName    : adwsTest-MemberB\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1126",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Get-ADPrincipalGroupMembership",
+                      "Category":  "GroupRead",
+                      "StartTime":  "2026-06-08T12:05:57.1249164+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  452,
+                      "Output":  "distinguishedName : CN=adwsTest-Group,CN=Users,DC=samba,DC=local\r\nGroupCategory     : Security\r\nGroupScope        : Global\r\nname              : adwsTest-Group\r\nobjectClass       : group\r\nobjectGUID        : 3b04caec-f44a-4e31-93b9-e78fe9b8288c\r\nSamAccountName    : adwsTest-Group\r\nSID               : S-1-5-21-1724976271-2482711702-3578161-1124",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "Remove-ADGroupMember + cleanup",
+                      "Category":  "Cleanup",
+                      "StartTime":  "2026-06-08T12:05:58.3762063+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  1638,
+                      "Output":  "",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "List 10 classSchema",
+                      "Category":  "Schema",
+                      "StartTime":  "2026-06-08T12:06:00.1951056+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  368,
+                      "Output":  "Name                         \r\n----                         \r\nMS-SQL-SQLRepository         \r\nms-DS-Claim-Types            \r\nQuery-Policy                 \r\nms-DFSR-ReplicationGroup     \r\nms-ieee-80211-Policy         \r\nAddress-Book-Container       \r\nFT-Dfs                       \r\nRID-Manager                  \r\ngroupOfUniqueNames           \r\nms-net-ieee-80211-GroupPolicy",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "List 10 attributeSchema",
+                      "Category":  "Schema",
+                      "StartTime":  "2026-06-08T12:06:00.5727277+02:00",
+                      "Status":  "Pass",
+                      "DurationMs":  323,
+                      "Output":  "Name                             \r\n----                             \r\nMSMQ-Site-Name-Ex                \r\nAllowed-Attributes-Effective     \r\nms-DFSR-MemberReferenceBL        \r\nACS-Aggregate-Token-Rate-Per-User\r\nms-DFSR-ConflictSizeInMb         \r\nSchedule                         \r\nmsSFU-30-Max-Gid-Number          \r\nHelp-Data16                      \r\nFRS-Primary-Member               \r\nPackage-Type",
+                      "Error":  null
+                  },
+                  {
+                      "Name":  "50 parallel Get-ADUser -Filter * (throttle 10)",
+                      "Category":  "Stress",
+                      "StartTime":  "2026-06-08T12:06:00.9069705+02:00",
+                      "Status":  "Fail",
+                      "DurationMs":  3,
+                      "Output":  null,
+                      "Error":  "Le jeu de paramètres ne peut pas être résolu à l\u0027aide des paramètres nommés spécifiés."
+                  }
+              ]
+}

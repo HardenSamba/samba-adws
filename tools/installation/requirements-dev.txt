@@ -1,0 +1,10 @@
+# Development / CI tooling for SambaAD ADWS (not required at runtime).
+# Install with: pip3 install -r requirements-dev.txt
+# Then: pre-commit install
+
+ruff>=0.8
+flake8>=7.0
+flake8-functions>=0.0.8
+pylint>=3.0
+mypy>=1.13
+pre-commit>=3.5

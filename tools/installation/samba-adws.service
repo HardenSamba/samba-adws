@@ -1,0 +1,18 @@
+[Unit]
+Description=Samba AD - Active Directory Web Services (ADWS, port 9389/tcp)
+Documentation=https://github.com/CaracalC/SambaAD_ADWS
+After=samba-ad-dc.service network-online.target
+Wants=network-online.target
+Requires=samba-ad-dc.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=-/etc/default/samba-adws
+ExecStart=/usr/bin/python3 -m src.main
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

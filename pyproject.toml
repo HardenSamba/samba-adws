@@ -1,0 +1,36 @@
+# Tooling configuration for SambaAD ADWS.
+# Style/lint only — there is no build step (entry point: src/main.py, run via python3 -m src.main).
+# Decided norms: line length = 100 (enforced), full typing (mypy --strict).
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "classes"]
+# tools/ holds dev tooling + vendored work/windows; src/nettcp + src/wcf are
+# vendored third-party protocol libs (not subject to project norms).
+extend-exclude = ["tools", "src/nettcp", "src/wcf"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes (no import *), I import sorting,
+# N naming (§6.1), B bugbear (mutable defaults, bare except), C4, UP.
+select = ["E", "F", "W", "I", "N", "B", "C4", "UP"]
+# Keep the codebase's typing-module style (Dict/List/Optional) instead of
+# forcing PEP 585/604 builtins — consistent with the existing code.
+# N818: the exception hierarchy deliberately uses the `Exception` suffix.
+ignore = ["UP006", "UP007", "UP035", "UP045", "N818"]
+
+[tool.mypy]
+# Full typing is the norm: strict, checked against the Linux runtime
+# (ForkingMixIn etc. only exist where os.fork does).
+python_version = "3.11"
+platform = "linux"
+strict = true
+ignore_missing_imports = true
+files = ["src", "classes"]
+# src/nettcp + src/wcf are vendored protocol libraries (untyped) — not checked.
+exclude = '^src/(nettcp|wcf)/'
+
+# Treat the vendored libs as an Any boundary so calls into them pass under strict.
+[[tool.mypy.overrides]]
+module = ["src.nettcp.*", "src.wcf.*"]
+follow_imports = "skip"

@@ -1,0 +1,8 @@
+# flake8 + flake8-functions configuration.
+[flake8]
+max-line-length = 100
+extend-ignore = W503, E203
+# flake8-functions (§6.1): function body length and parameter count.
+max-function-length = 20
+max-parameters-amount = 4
+exclude = .git,__pycache__,build,dist,tools,src/nettcp,src/wcf

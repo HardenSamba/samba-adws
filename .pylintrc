@@ -1,0 +1,19 @@
+# pylint configuration for SambaAD ADWS.
+# Used as an advisory (manual) pre-commit stage. The authoritative blocker
+# for §6.1 structure (1 class / 5 functions per file) is tools/norms.
+
+[MESSAGES CONTROL]
+# Norms say no docstrings.
+disable=missing-module-docstring,
+        missing-class-docstring,
+        missing-function-docstring,
+        too-few-public-methods
+
+[DESIGN]
+# §6.1: imbrication <= 2, ~4 parametres max.
+max-args=4
+max-nested-blocks=2
+
+[FORMAT]
+max-line-length=100
+max-module-lines=2000

@@ -1,0 +1,32 @@
+name: samba-adws
+summary: Active Directory Web Services for Samba, so Windows tooling can manage the
+  domain.
+version: 1.0.0
+language:
+  primary: python
+  exceptions:
+  - component: end-to-end test suite
+    language: powershell
+    reason: Verifying the real Windows client requires running cmdlets on Windows.
+installs_on:
+- domain-controller
+requires:
+  samba_ad_domain: true
+  samba_min_version: '4.19'
+  modules: []
+  debian_packages:
+  - python3-samba
+  - python3-gssapi
+provides:
+  ports:
+  - number: 9389
+    protocol: tcp
+    purpose: Active Directory Web Services endpoint
+  systemd_units:
+  - samba-adws.service
+  commands:
+  - samba-adws
+writes:
+  config_dir: /etc/hardensamba/samba-adws/
+  firewall_rules:
+  - allow tcp/9389 from domain clients
