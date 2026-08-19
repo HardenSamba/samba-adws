@@ -291,8 +291,10 @@ class UnicodeChars8TextRecord(Text):
         r"""
         >>> str(UnicodeChars8TextRecord('abc'))
         'abc'
+        >>> str(UnicodeChars8TextRecord("a<b>c&d"))
+        'a&lt;b&gt;c&amp;d'
         """
-        return self.value
+        return escape(self.value)
 
     @classmethod
     def parse(cls, fp):
