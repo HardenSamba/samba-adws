@@ -39,7 +39,8 @@ class ConnectionHandler(BaseRequestHandler):
             self.request.settimeout(10)
 
             self.stream = SocketStream(self.request)
-            phase_handler = ProtocolHandler(self.stream, self.logger)
+            phase_handler = ProtocolHandler(
+                self.stream, self.logger, f"{client_ip}:{client_port}")
 
             # Phase 1: Preamble negotiation (Version, Mode, Via, Encoding)
             if not phase_handler.handle_preamble():

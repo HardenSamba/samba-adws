@@ -14,6 +14,7 @@ from src.nettcp.stream.gssapi import GENSECStream
 from src.nettcp.stream.socket import SocketStream
 
 from classes.handlers.dispatcher import ADWSDispatcher
+from classes.server import upgrade_check
 
 socket_timeout = socket.timeout
 
@@ -21,9 +22,11 @@ socket_timeout = socket.timeout
 class ProtocolHandler:
     """Manages the three-phase net.tcp protocol handshake"""
 
-    def __init__(self, stream: SocketStream, logger: logging.Logger) -> None:
+    def __init__(self, stream: SocketStream, logger: logging.Logger,
+                 peer: str = "") -> None:
         self.stream: Any = stream
         self.logger = logger
+        self.peer = peer
         self.negotiated = False
         self.request_index = 0
         self.pending_upgrade: Any = None
@@ -86,6 +89,15 @@ class ProtocolHandler:
                 return False
 
             self.logger.info("[SECURITY] ◀ UpgradeRequestRecord received from client")
+
+            # [MC-NMF] 3.1.4.7: an unsupported upgrade closes the session and
+            # may carry a Fault Record. Nothing is granted before this passes.
+            if not upgrade_check.is_supported(obj):
+                self.logger.warning(
+                    f"[SECURITY] ✗ {self.peer} requested an unsupported upgrade: "
+                    f"{upgrade_check.describe(obj)}")
+                self.send_record(upgrade_check.fault_record())
+                return False
 
             # Send upgrade response
             self.logger.info("[SECURITY] ▶ Sending UpgradeResponseRecord to client")
