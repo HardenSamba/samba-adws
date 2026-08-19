@@ -8,6 +8,8 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+from src.nettcp.nmf import MAX_MESSAGE_SIZE as DEFAULT_MAX_MESSAGE_SIZE
+
 
 @dataclass
 class ServerConfig:
@@ -16,6 +18,7 @@ class ServerConfig:
     port: int = 9389
     max_connections: int = 128
     timeout: int = 300
+    max_message_size: int = DEFAULT_MAX_MESSAGE_SIZE
 
 @dataclass
 class SambaConfig:
@@ -39,7 +42,9 @@ class Config:
     def __init__(self) -> None:
         self.server = ServerConfig(
             host=os.environ.get("ADWS_HOST", "0.0.0.0"),
-            port=int(os.environ.get("ADWS_PORT", "9389")))
+            port=int(os.environ.get("ADWS_PORT", "9389")),
+            max_message_size=int(os.environ.get(
+                "ADWS_MAX_MESSAGE_SIZE", str(DEFAULT_MAX_MESSAGE_SIZE))))
         self.samba = SambaConfig(realm=os.environ.get("ADWS_REALM"))
         self.logging = LogConfig(
             file=os.environ.get("ADWS_LOG_FILE", "adws.log"),

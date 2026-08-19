@@ -15,6 +15,7 @@ Errors actually encountered in real runs, with their causes and their fixes.
 | `Unable to find a default server` / ADAC does not connect (`1355`) | [§ ADWS discovery](#7-unable-to-find-a-default-server) |
 | Mutations refused | [§ Insufficient rights](#8-insufficient-rights) |
 | Write with accented characters → `ADServerDownException` / `undefined entity` | [§ Non-ASCII characters](#9-non-ascii-characters-in-a-write) |
+| A connection drops with no fault, log says `[LIMIT]` | [§ Announced size](#10-a-connection-is-closed-on-the-announced-size) |
 
 ---
 
@@ -362,6 +363,54 @@ def escapecp(cp):
 
 Verified end to end: `Set-ADUser demo -Description 'créé via ADWS souverain'
 -Replace @{title='Ingénieur Réseau'}` succeeds and the values round-trip intact.
+
+---
+
+## 10. A connection is closed on the announced size
+
+### Symptom
+
+The client's connection drops without an error message from the server, and the
+log carries one line:
+
+```
+[LIMIT] 10.0.0.5:52344 announced 4294967296 bytes, maximum is 1048576
+[LIMIT] 10.0.0.5:52344 refused and disconnected: announced length 4294967296 exceeds maximum 1048576
+```
+
+Or, when the length was not a plausible number at all:
+
+```
+[MESSAGES] ✗ Error: varint longer than 5 bytes
+```
+
+### Cause
+
+Every length a peer announces is bounded before it is read, so that an
+unauthenticated client cannot make the server allocate an arbitrary amount of
+memory by announcing a large one. The ceiling is `ADWS_MAX_MESSAGE_SIZE` in
+`/etc/default/samba-adws`, 1 MB by default. The connection is closed rather than
+answered with a SOAP fault: the violation is detected below the message layer,
+where there is no `MessageID` to put in a `RelatesTo`, and a fault without one
+is ignored by the client anyway (§ 6).
+
+### Fix
+
+If the client is hostile or broken, nothing to do: this is the control working.
+
+If a legitimate request is being refused, the request is genuinely larger than
+1 MB. That is unusual — the ceiling bounds the **request**, not the response, so a
+large `Get-ADUser -Filter *` result is unaffected. A write of a very large
+attribute value can reach it. Raise the ceiling and restart:
+
+```bash
+sudo sed -i 's/^ADWS_MAX_MESSAGE_SIZE=.*/ADWS_MAX_MESSAGE_SIZE=4194304/' /etc/default/samba-adws
+sudo systemctl restart samba-adws
+```
+
+The value only takes effect on restart. Windows ADWS applies the same 1 MB
+default, so a request refused here is a request a Windows domain controller
+would also refuse.
 
 ---
 
