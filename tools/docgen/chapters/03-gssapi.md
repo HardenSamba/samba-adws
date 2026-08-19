@@ -475,35 +475,40 @@ requis du client vers le DC en `documentation/02-installation.md:39` (table des
 ports, lignes 37 à 42). Le serveur ADWS ne voit que l'étape 4 et produit
 l'étape 5 : il n'est ni KDC ni relais vers le KDC.
 
-## Les flags demandés
+## Requested flags
 
-Le code client vendoré `GSSAPIStream.__init__` (`gssapi.py:21-24`) montre
-explicitement les flags qu'un initiateur GSS-API doit poser pour ADWS :
+The vendored `GSSAPIStream` client explicitly requests the five services used
+by the protected ADWS stream:
 
 ```python
 flags=(gssapi.RequirementFlag.mutual_authentication |
        gssapi.RequirementFlag.confidentiality |
-       gssapi.RequirementFlag.integrity)
+       gssapi.RequirementFlag.integrity |
+       gssapi.RequirementFlag.replay_detection |
+       gssapi.RequirementFlag.out_of_sequence_detection)
 ```
 
-Ces trois flags correspondent point pour point au contrat
-`ProtectionLevel.EncryptAndSign` + `ClientCredentialType.Windows` de
-la configuration d’hôte du service ADWS Microsoft. Leur encodage numérique, tel qu'il apparaît dans
-le checksum GSS-API de l'authenticator (RFC 4121 §4.1.1.1) :
+Mutual authentication, confidentiality, and integrity implement the service's
+`ProtectionLevel.EncryptAndSign` and `ClientCredentialType.Windows` contract.
+Replay and sequence detection prevent a caller from silently losing the
+ordering guarantees described by this protocol. After SPNEGO completes, the
+client verifies that all five flags were negotiated before it sends WCF data.
+Their numeric GSS-API encoding is:
 
-| Bit | Flag GSS-API | Demandé par ADWS |
+| Bit | GSS-API flag | Linux client request |
 |---|---|---|
-| `0x01` | `GSS_C_DELEG_FLAG` | Non |
-| `0x02` | `GSS_C_MUTUAL_FLAG` | Oui |
-| `0x04` | `GSS_C_REPLAY_FLAG` | Implicite (impliqué par SEQUENCE) |
-| `0x08` | `GSS_C_SEQUENCE_FLAG` | Oui côté WCF |
-| `0x10` | `GSS_C_CONF_FLAG` | Oui (`EncryptAndSign`) |
-| `0x20` | `GSS_C_INTEG_FLAG` | Oui |
+| `0x01` | `GSS_C_DELEG_FLAG` | No |
+| `0x02` | `GSS_C_MUTUAL_FLAG` | Yes |
+| `0x04` | `GSS_C_REPLAY_FLAG` | Yes |
+| `0x08` | `GSS_C_SEQUENCE_FLAG` | Yes |
+| `0x10` | `GSS_C_CONF_FLAG` | Yes (`EncryptAndSign`) |
+| `0x20` | `GSS_C_INTEG_FLAG` | Yes |
 
-> `GSSAPIStream` (`gssapi.py:20-78`) est le chemin **client**, hérité du projet
-> amont de Timo Schmid. Il n'est jamais instancié par le serveur : `protocol.py`
-> n'utilise que `GENSECStream`. Il sert de référence de comportement et est
-> employé par le client de test `src/nettcp/stream/nmf.py:37`.
+> `GSSAPIStream` (`gssapi.py:20-78`) is the **client** path inherited from Timo
+> Schmid's upstream project. The server never instantiates it: `protocol.py`
+> uses only `GENSECStream`. `src/nettcp/stream/nmf.py:37` uses the initiator for
+> the public `samba_adws.client.ADWSClient`; server-side Samba imports remain
+> lazy so this path works on a Linux workstation.
 
 ## Types de chiffrement
 
@@ -893,7 +898,7 @@ transparente pour le parseur NMF.
 | Choix `Sealed` vs signature seule | Samba, d'après les flags client | pas de `want_feature` |
 | Incrément de `SND_SEQ` | Samba | jamais lu par le projet |
 | Vérification du HMAC | Samba, dans `unwrap` | `gssapi.py:160,166` |
-| Détection de rejeu / hors-séquence | Samba, si le flag est négocié | non configuré |
+| Détection de rejeu / hors-séquence | Samba, si le flag est négocié | requested and checked by the Linux client |
 | Découpage en tranches | **Le projet** | `gssapi.py:148-152` |
 | Cadrage `uint32` LE | **Le projet** | `negotiate.py:61` |
 | Réassemblage du clair | **Le projet** | `gssapi.py:162-169` |

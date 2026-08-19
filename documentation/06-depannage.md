@@ -295,19 +295,27 @@ or, on the server side:
 
 ### Cause
 
-The authenticated account (typically the one that ran `kinit`) does not have the AD rights for the requested modification.
+Do not currently infer the caller's AD rights from this error. The server
+authenticates the remote principal but opens its request-time `SamDB` with a
+SYSTEM session. [Issue #8](https://github.com/HardenSamba/samba-adws/issues/8)
+tracks propagation of the accepted GSSAPI identity into Samba authorization.
+Until that fix is live-tested, an access error may come from another LDB or
+schema constraint, while an operation that succeeds may have exceeded the
+caller's actual rights.
 
 ### Fix
 
-- Check that the current user is in `Domain Admins` or holds an explicit delegation.
-- Test over direct LDAP to isolate ADWS from the AD rights:
+- Keep ADWS write operations disabled outside a trusted lab until #8 is fixed.
+- Test over direct LDAP as the same principal to establish the expected ACL
+  result independently of ADWS:
 
   ```bash
   ldbedit -H ldap://samba.local -U Administrator \
           -b "CN=cible,CN=Users,DC=samba,DC=local"
   ```
 
-  If `ldbedit` refuses as well → this is an AD rights problem, not an ADWS bug.
+  A different ADWS result is evidence for #8; it is not proof that the direct
+  LDAP ACL result was applied to the ADWS request.
 
 ---
 
@@ -359,6 +367,12 @@ _XML_ENTITY_BY_CP = {0x3C: '&lt;', 0x3E: '&gt;', 0x26: '&amp;', 0x22: '&quot;'}
 def escapecp(cp):
     return _XML_ENTITY_BY_CP.get(cp, chr(cp))
 ```
+
+Both the UTF-8 `Chars*` and UTF-16 `UnicodeChars*` record families must call
+this escape function when reconstructing XML. The Linux client encoder uses
+`UnicodeChars*` for ordinary text, including distinguished names; omitting the
+call there would turn a valid `&amp;` back into a bare `&` and produce malformed
+SOAP on the server.
 
 Verified end to end: `Set-ADUser demo -Description 'créé via ADWS souverain'
 -Replace @{title='Ingénieur Réseau'}` succeeds and the values round-trip intact.

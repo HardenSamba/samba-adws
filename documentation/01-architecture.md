@@ -51,7 +51,7 @@ Implements [MS-NMF] (.NET Message Framing Protocol).
 | `protocol2xml.py` | Binary record to XML fragment conversion |
 | `tools/work/proxy.py` | Capture / replay tool for debugging (outside the runtime, moved to `tools/work/`) |
 | `stream/socket.py` | Buffered wrapper around the TCP socket |
-| `stream/gssapi.py` | GSSAPI encapsulation: negotiates Kerberos, seals and unseals every message after the security upgrade |
+| `stream/gssapi.py` | GSSAPI initiator plus the server GENSEC acceptor; Samba imports stay lazy and server-only |
 
 This is the layer that speaks "the wire". Above it, payloads are XML.
 

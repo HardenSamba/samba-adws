@@ -1,6 +1,6 @@
 # Pre-commit gates for SambaAD ADWS.
 #
-# BLOCKING (every commit, on changed src/ and classes/ files):
+# BLOCKING (every commit, on changed src/, classes/, and samba_adws/ files):
 #   - §6.1 norms via tools/norms (1 class & 5 functions per file, functions
 #     <=20 lines, nesting <=2, line <=100, '#' header block before each
 #     def/class)
@@ -29,14 +29,14 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        files: ^(src|classes)/(?!nettcp/|wcf/)
+        files: ^(src|classes|samba_adws)/(?!nettcp/|wcf/)
 
   - repo: https://github.com/pycqa/flake8
     rev: 7.1.1
     hooks:
       - id: flake8
         additional_dependencies: [flake8-functions]
-        files: ^(src|classes)/(?!nettcp/|wcf/)
+        files: ^(src|classes|samba_adws)/(?!nettcp/|wcf/)
 
   - repo: local
     hooks:
@@ -45,15 +45,15 @@ repos:
         entry: python -m tools.norms --max-line 100 --require-headers
         language: python
         types: [python]
-        files: ^(src|classes)/(?!nettcp/|wcf/)
+        files: ^(src|classes|samba_adws)/(?!nettcp/|wcf/)
         pass_filenames: true
 
       - id: mypy
         name: mypy --strict (typing, blocking)
-        entry: python -m mypy src classes
+        entry: python -m mypy src classes samba_adws
         language: system
         types: [python]
-        files: ^(src|classes)/(?!nettcp/|wcf/)
+        files: ^(src|classes|samba_adws)/(?!nettcp/|wcf/)
         pass_filenames: false
 
       - id: pylint
@@ -61,5 +61,5 @@ repos:
         entry: pylint
         language: system
         types: [python]
-        files: ^(src|classes)/(?!nettcp/|wcf/)
+        files: ^(src|classes|samba_adws)/(?!nettcp/|wcf/)
         stages: [manual]

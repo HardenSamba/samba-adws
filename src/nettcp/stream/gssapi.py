@@ -15,13 +15,22 @@ log = logging.getLogger(__name__ + '.GSSAPIStream')
 # otherwise a single wrapped token spills into a second frame and the reader,
 # which assumes one frame == one token, fails to unwrap it.
 _PLAINTEXT_CHUNK = 0xF000
+_SPNEGO_OID = '1.3.6.1.5.5.2'
+_REQUIRED_FLAGS = (
+    gssapi.RequirementFlag.mutual_authentication,
+    gssapi.RequirementFlag.confidentiality,
+    gssapi.RequirementFlag.integrity,
+    gssapi.RequirementFlag.replay_detection,
+    gssapi.RequirementFlag.out_of_sequence_detection,
+)
+_DEFAULT_FLAGS = 0
+for _flag in _REQUIRED_FLAGS:
+    _DEFAULT_FLAGS |= _flag
 
 
 class GSSAPIStream:
     def __init__(self, stream, server_name,
-                 flags=(gssapi.RequirementFlag.mutual_authentication |
-                        gssapi.RequirementFlag.confidentiality |
-                        gssapi.RequirementFlag.integrity)):
+                 flags=_DEFAULT_FLAGS):
         self._inner = NegotiateStream(stream)
         if isinstance(server_name, str):
             server_name = gssapi.Name(server_name, name_type=gssapi.NameType.hostbased_service)
@@ -32,7 +41,8 @@ class GSSAPIStream:
 
     def negotiate(self):
         self.client_ctx = gssapi.SecurityContext(name=self.server_name, usage='initiate',
-                                                 flags=self.flags)
+                                                 flags=self.flags,
+                                                 mech=gssapi.OID.from_int_seq(_SPNEGO_OID))
 
         token = b''
         while not self.client_ctx.complete:
@@ -45,6 +55,11 @@ class GSSAPIStream:
                 token = self._inner.read()
             else:
                 log.debug('GSSAPI Handshake done')
+
+        missing = [flag.name for flag in _REQUIRED_FLAGS
+                   if flag not in self.client_ctx.actual_flags]
+        if missing:
+            raise IOError('GSSAPI context omitted required flags: %s' % ', '.join(missing))
 
     def write(self, data):
         if not self.client_ctx:
@@ -77,15 +92,14 @@ class GSSAPIStream:
     def close(self):
         self._inner.close()
 
-from samba.param import LoadParm
-from samba.credentials import Credentials
-from samba import gensec, auth
 
 class GENSECStream:
     def __init__(self, stream): #, server_name,
                  # flags=(gssapi.RequirementFlag.mutual_authentication |
                  #        gssapi.RequirementFlag.confidentiality |
                  #        gssapi.RequirementFlag.integrity)):
+        from samba.param import LoadParm
+
         self._inner = NegotiateStream(stream)
         # if isinstance(server_name, str):
         #     server_name = gssapi.Name(server_name, name_type=gssapi.NameType.hostbased_service)
@@ -102,6 +116,9 @@ class GENSECStream:
         self.settings["target_hostname"] = self.lp_ctx.get("netbios name")
 
     def negotiate_server(self):
+        from samba import auth, gensec
+        from samba.credentials import Credentials
+
         token = self._inner.read()
 
         self.client_ctx = gensec.Security.start_server(settings=self.settings,
