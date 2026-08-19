@@ -54,7 +54,9 @@ class ConnectionHandler(BaseRequestHandler):
             # Phase 3: Message exchange with authenticated session
             # Use system_session for SamDB context - auth is done via GSSAPI
             session_info = system_session() if system_session else None
-            dispatcher = ADWSDispatcher(self.logger, session_info=session_info)
+            dispatcher = ADWSDispatcher(
+                self.logger, session_info=session_info,
+                peer=f"{client_ip}:{client_port}")
             if not phase_handler.handle_messages(dispatcher):
                 self.logger.warning("[MESSAGES] Message exchange failed")
                 return

@@ -217,14 +217,38 @@ sudo journalctl -u samba-adws -f | grep -E "fault|RelatesTo"
 
 ### Fix
 
-In `dispatcher._fault()`, **always** bail out through:
+`SoapEnvelope.fault()` has always injected `<a:RelatesTo>{relates_to}</a:RelatesTo>`. The header went out empty because the value did, and this section used to prescribe exactly the line that emptied it:
 
 ```python
-relates_to = context.message_id if context else ""
-return SoapEnvelope.fault(relates_to, "s:Receiver", message)
+relates_to = context.message_id if context else ""      # the defect
 ```
 
-And make sure `SoapEnvelope.fault()` does inject `<a:RelatesTo>{relates_to}</a:RelatesTo>` into the header.
+`context` is `None` whenever the failure happened **before** the request was parsed — a WCF decode error, or XML that does not parse — which is precisely when a fault is most needed. `dispatcher._fault()` now takes the decoded request text as well as the context, and recovers the identifier from the text when there is no context:
+
+```python
+if context is not None:
+    return SoapEnvelope.fault(context.message_id, "s:Receiver", message)
+relates_to = message_id.extract(request)                 # tolerant of unparseable text
+```
+
+`classes/parsing/message_id.py` scans for a `MessageID` element under any prefix without requiring a parseable document. It reads at most the first 8 KB and returns nothing for a value over 256 characters: its input is chosen by the peer and its output goes into a response header.
+
+### The case where nothing can be recovered
+
+If the payload cannot be WCF-decoded at all, there is no text to scan and no identifier anywhere. **The connection is closed rather than answered.** A fault with an empty `RelatesTo` is discarded by the client, which then waits for its own timeout — the very symptom this section describes — so sending one is worse than sending nothing. A closed connection surfaces immediately.
+
+The log says which of the two happened, and for whom:
+
+```
+[DISPATCH] 10.0.0.5:52344 sent a request that did not parse; faulting with the MessageID recovered from its text
+[DISPATCH] 10.0.0.5:52344 sent a request with no recoverable MessageID; closing rather than sending a fault the client would discard
+```
+
+An [MC-NMF] `FaultRecord` was the alternative, and it is not used here: the specification defines no fault name for an undecodable envelope body, and inventing one under a private namespace would tell the client no more than the close does.
+
+### A request that legitimately omits MessageID
+
+WS-Addressing permits it, and such a request parses, so it has a context and takes the first branch above with an empty `relates_to`. That is unchanged and deliberate; it is not the defect described here.
 
 ---
 
