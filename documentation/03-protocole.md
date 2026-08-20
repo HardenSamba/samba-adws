@@ -45,7 +45,27 @@ In the code: `src/nettcp/nmf.py` (parsing) + `classes/server/protocol.py` (state
 
 ## Phase 2: GSSAPI negotiation
 
-Once `UpgradeRequestRecord` has been received, the server replies with `UpgradeResponseRecord`, then both sides exchange **raw GSSAPI tokens** (each prefixed with a little-endian `int32` length).
+Once `UpgradeRequestRecord` has been received, the server **compares the upgrade it names** and only then replies with `UpgradeResponseRecord`; both sides then exchange **raw GSSAPI tokens** (each prefixed with a little-endian `int32` length).
+
+### Which upgrade is accepted, and what a refusal looks like
+
+`application/negotiate`, compared exactly: no trimming, no case folding. The .NET client sends the literal lowercase string and compares it ordinally, so an exact match is the behaviour a real client expects and the one that cannot be widened by accident.
+
+[MC-NMF] section 3.1.4.7 settles what a server does with anything else:
+
+> If the upgrade is not supported, a Fault Record MAY be sent, and the session MUST be closed.
+
+So closing is obligatory and the fault is optional. **This server sends the fault, then closes.** The reasoning: without it a misconfigured client sees the connection drop with nothing to go on, and the failure looks identical to a network fault; with it, WCF surfaces the fault string. The string is fixed and reflects nothing the peer sent, so answering an unauthenticated peer gives it no information it did not already have.
+
+The fault name is the one [MC-NMF] section 2.2.3.8 defines for exactly this case — "the requested upgrade is not supported by the remote endpoint":
+
+```
+0x08 <varint length> http://schemas.microsoft.com/ws/2006/05/framing/faults/UpgradeInvalid
+```
+
+In the code: `classes/server/upgrade_check.py`, called from `handle_security` between the record-code check and the `UpgradeResponseRecord` write, so nothing is granted before the value has been accepted. A refusal writes one WARNING line naming the client and the requested value; the value is truncated and passed through `repr()`, because its length prefix is read before any credential has been presented.
+
+Note the specification is designated **[MC-NMF]**, not [MS-NMF]; both names appear in this repository's documentation and only the first resolves on Microsoft Learn.
 
 ```
 client ──── token #1 (AP-REQ Kerberos) ──── ► server

@@ -10,10 +10,12 @@ import socket
 from typing import Any
 
 from src.nettcp import nmf
+from src.nettcp.nmf import MessageSizeExceeded
 from src.nettcp.stream.gssapi import GENSECStream
 from src.nettcp.stream.socket import SocketStream
 
 from classes.handlers.dispatcher import ADWSDispatcher
+from classes.server import upgrade_check
 
 socket_timeout = socket.timeout
 
@@ -21,9 +23,11 @@ socket_timeout = socket.timeout
 class ProtocolHandler:
     """Manages the three-phase net.tcp protocol handshake"""
 
-    def __init__(self, stream: SocketStream, logger: logging.Logger) -> None:
+    def __init__(self, stream: SocketStream, logger: logging.Logger,
+                 peer: str = "") -> None:
         self.stream: Any = stream
         self.logger = logger
+        self.peer = peer
         self.negotiated = False
         self.request_index = 0
         self.pending_upgrade: Any = None
@@ -62,6 +66,8 @@ class ProtocolHandler:
                     self.logger.warning(f"[PREAMBLE] ⚠ Unexpected record code: {code:#04x}")
                     return False
 
+        except MessageSizeExceeded:
+            raise
         except Exception as e:
             self.logger.error(f"[PREAMBLE] ✗ Error: {str(e)}", exc_info=True)
             return False
@@ -87,6 +93,15 @@ class ProtocolHandler:
 
             self.logger.info("[SECURITY] ◀ UpgradeRequestRecord received from client")
 
+            # [MC-NMF] 3.1.4.7: an unsupported upgrade closes the session and
+            # may carry a Fault Record. Nothing is granted before this passes.
+            if not upgrade_check.is_supported(obj):
+                self.logger.warning(
+                    f"[SECURITY] ✗ {self.peer} requested an unsupported upgrade: "
+                    f"{upgrade_check.describe(obj)}")
+                self.send_record(upgrade_check.fault_record())
+                return False
+
             # Send upgrade response
             self.logger.info("[SECURITY] ▶ Sending UpgradeResponseRecord to client")
             self.send_record(nmf.UpgradeResponseRecord())
@@ -100,6 +115,8 @@ class ProtocolHandler:
 
             return True
 
+        except MessageSizeExceeded:
+            raise
         except Exception as e:
             self.logger.error(f"[SECURITY] ✗ Error: {str(e)}", exc_info=True)
             return False
@@ -123,6 +140,8 @@ class ProtocolHandler:
                     except Exception:
                         pass
                     return True
+                except MessageSizeExceeded:
+                    raise
                 except (EOFError, OSError):
                     # Connection closed by client
                     self.logger.info("[MESSAGES] ◀ Connection closed by client\n")
@@ -176,6 +195,8 @@ class ProtocolHandler:
                     self.logger.warning(f"[MESSAGES] ⚠ Unexpected record code: {code:#04x}")
                     return False
 
+        except MessageSizeExceeded:
+            raise
         except Exception as e:
             self.logger.error(f"[MESSAGES] ✗ Error: {str(e)}", exc_info=True)
             return False

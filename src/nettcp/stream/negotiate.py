@@ -5,10 +5,15 @@ from __future__ import print_function, unicode_literals, absolute_import
 
 import enum
 import struct
-from ..nmf import Record
+from ..nmf import Record, MessageSizeExceeded
 import logging
 
 log = logging.getLogger(__name__ + '.NegotiateStream')
+
+# The writer above never emits more than 0xFC30 bytes in one frame, so a peer
+# announcing a larger frame is not following [MS-NNS]. The handshake frames
+# carry their length as '>H' and are already bounded at 65535 by the format.
+MAX_FRAME_SIZE = 0xFC30
 
 
 class MessageType(enum.IntEnum):
@@ -77,6 +82,10 @@ class NegotiateStream:
             return self._inner.read(message.payload_size)
         else:
             payload_size = struct.unpack('<I', self._inner.read(4))[0]
+            if payload_size > MAX_FRAME_SIZE:
+                raise MessageSizeExceeded(
+                    'frame of {} bytes exceeds maximum {}'.format(
+                        payload_size, MAX_FRAME_SIZE))
             return self._inner.read(payload_size)
 
     def write_handshake_done(self, data):

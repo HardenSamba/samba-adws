@@ -1,9 +1,6 @@
 # Tooling configuration for SambaAD ADWS.
 # Packaging is tracked separately by issue #6; this file does not define a build.
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -36,3 +33,12 @@ exclude = '^src/(nettcp|wcf)/'
 [[tool.mypy.overrides]]
 module = ["src.nettcp.*", "src.wcf.*"]
 follow_imports = "skip"
+
+[tool.pytest.ini_options]
+# tests/unit runs anywhere; tests/dc needs a provisioned directory and is
+# skipped without python3-samba (tests/conftest.py). tools/test still holds
+# the operator diagnostic and the suites written before this layout existed.
+testpaths = ["tests", "tools/test"]
+markers = [
+    "dc: needs a provisioned Samba AD DC; skipped when python3-samba is absent",
+]

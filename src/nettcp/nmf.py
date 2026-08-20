@@ -3,6 +3,7 @@
 # Copyright 2016 Timo Schmid
 from __future__ import unicode_literals, print_function
 
+import os
 import struct
 import enum
 import logging
@@ -25,6 +26,20 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
+
+# A 32-bit varint occupies five bytes at most. Past that the decoder is being
+# fed a stream that cannot terminate, so refuse instead of shifting forever.
+MAX_VARINT_BYTES = 5
+
+# Ceiling on any length a peer announces, in bytes. This decoder runs below the
+# server and cannot reach its configuration, so it reads the environment
+# itself; classes/server/config.py imports this value as its own default, so
+# the two cannot drift apart. tools/test/test_limits.py asserts they agree.
+MAX_MESSAGE_SIZE = int(os.environ.get('ADWS_MAX_MESSAGE_SIZE', 1024 * 1024))
+
+
+class MessageSizeExceeded(ValueError):
+    """A peer announced a length above the ceiling, or an unterminated varint."""
 
 
 def b(data):
@@ -61,6 +76,9 @@ def varint_stream(obj, stream):
     val = 0
     cnt = 0
     while True:
+        if cnt >= MAX_VARINT_BYTES:
+            raise MessageSizeExceeded(
+                'varint longer than {} bytes'.format(MAX_VARINT_BYTES))
         d = b(stream.read(1))[1]
         if not d:
             break
@@ -70,6 +88,9 @@ def varint_stream(obj, stream):
         if not d & 0x80:
             break
 
+    if val > MAX_MESSAGE_SIZE:
+        raise MessageSizeExceeded(
+            'announced length {} exceeds maximum {}'.format(val, MAX_MESSAGE_SIZE))
     return val
 
 varint.stream = varint_stream

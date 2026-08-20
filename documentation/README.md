@@ -27,7 +27,7 @@ Kerberos requirements, and current action surface.
 
 ### I want to write a regression test
 
-→ [05-tests.md § test_handlers.py](05-tests.md#2-test_handlerspy-handlers-en-isolation).
+→ [05-tests.md § pytest](05-tests.md#0-pytest-run-this-first) if it needs no directory, [05-tests.md § tests/dc](05-tests.md#2-testsdc-handlers-in-isolation) if it does.
 
 ---
 
@@ -72,7 +72,7 @@ Kerberos requirements, and current action surface.
 ### [05-tests.md](05-tests.md)
 - Overview of the three suites
 - `Test-ADWS-Sovereign.ps1` (end-to-end PowerShell validation)
-- `test_handlers.py` (handlers in isolation)
+- `pytest tests/dc` (handlers in isolation)
 - `test_adws.py` (environment diagnostics)
 - Recommended workflow
 

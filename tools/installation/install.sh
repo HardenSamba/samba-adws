@@ -84,6 +84,10 @@ ADWS_HOST=0.0.0.0
 ADWS_PORT=9389
 ADWS_LOG_FILE=${LOG_DIR}/adws.log
 ADWS_LOG_LEVEL=INFO
+# Ceiling on any length a client announces, in bytes. 1 MB matches the
+# MaxReceivedMessageSize default of the Windows ADWS service. A connection
+# announcing more is closed. Takes effect on: systemctl restart samba-adws
+ADWS_MAX_MESSAGE_SIZE=1048576
 EOF
     ok "wrote ${ENV_PATH}"
 }

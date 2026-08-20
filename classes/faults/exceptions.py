@@ -33,3 +33,12 @@ class ADWSObjectNotFoundException(ADWSException):
 class ADWSAccessDeniedException(ADWSException):
     """Access denied error"""
     pass
+
+class ADWSUnrelatableRequestException(ADWSException):
+    """No MessageID could be recovered, so no fault can relate to the request.
+
+    Raised by the fault builder itself and therefore never fed back into it.
+    The connection is closed instead: a fault with an empty RelatesTo is
+    discarded by the client, which then waits for its own timeout.
+    """
+    pass

@@ -291,6 +291,8 @@ class UnicodeChars8TextRecord(Text):
         r"""
         >>> str(UnicodeChars8TextRecord('abc'))
         'abc'
+        >>> str(UnicodeChars8TextRecord("a<b>c&d"))
+        'a&lt;b&gt;c&amp;d'
         """
         return escape(self.value)
 
