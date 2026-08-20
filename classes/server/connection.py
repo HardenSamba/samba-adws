@@ -7,6 +7,7 @@ import logging
 from socketserver import BaseRequestHandler
 from typing import Any
 
+from src.nettcp.nmf import MessageSizeExceeded
 from src.nettcp.stream.socket import SocketStream
 
 try:
@@ -15,6 +16,7 @@ except ImportError:
     system_session = None
 
 from classes.handlers.dispatcher import ADWSDispatcher
+from classes.server.limited_stream import LimitedStream
 from classes.server.protocol import ProtocolHandler
 
 
@@ -38,7 +40,9 @@ class ConnectionHandler(BaseRequestHandler):
             # 10 second timeout for initial connection, reduced after response
             self.request.settimeout(10)
 
-            self.stream = SocketStream(self.request)
+            self.stream = LimitedStream(
+                SocketStream(self.request), self.config.server.max_message_size,
+                f"{client_ip}:{client_port}", self.logger)
             phase_handler = ProtocolHandler(
                 self.stream, self.logger, f"{client_ip}:{client_port}")
 
@@ -55,11 +59,16 @@ class ConnectionHandler(BaseRequestHandler):
             # Phase 3: Message exchange with authenticated session
             # Use system_session for SamDB context - auth is done via GSSAPI
             session_info = system_session() if system_session else None
-            dispatcher = ADWSDispatcher(self.logger, session_info=session_info)
+            dispatcher = ADWSDispatcher(
+                self.logger, session_info=session_info,
+                peer=f"{client_ip}:{client_port}")
             if not phase_handler.handle_messages(dispatcher):
                 self.logger.warning("[MESSAGES] Message exchange failed")
                 return
 
+        except MessageSizeExceeded as e:
+            self.logger.warning(
+                f"[LIMIT] {client_ip}:{client_port} refused and disconnected: {e}")
         except (BrokenPipeError, ConnectionResetError, EOFError) as e:
             self.logger.info(f"[DISCONNECT] Client disconnected: {type(e).__name__}")
         except Exception as e:

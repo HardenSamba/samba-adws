@@ -115,6 +115,34 @@ To uninstall: `sudo tools/installation/install.sh --uninstall` (keeps the logs, 
 in AD). To reconfigure: edit `/etc/default/samba-adws`, then run
 `sudo systemctl restart samba-adws`.
 
+### 3.1 The environment file
+
+`/etc/default/samba-adws` holds every setting the service reads. A change takes
+effect on `systemctl restart samba-adws`, not before.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ADWS_HOST` | `0.0.0.0` | Address the listener binds. |
+| `ADWS_PORT` | `9389` | Port. 9389 is the port Microsoft assigns to ADWS; a client will not look elsewhere. |
+| `ADWS_LOG_FILE` | `/var/log/samba-adws/adws.log` | Rotating log file. |
+| `ADWS_LOG_LEVEL` | `INFO` | `DEBUG` adds the record-by-record protocol trace. |
+| `ADWS_MAX_MESSAGE_SIZE` | `1048576` (1 MB) | Ceiling on any length a client announces, in bytes. |
+
+`ADWS_MAX_MESSAGE_SIZE` bounds what an unauthenticated peer can make the server
+allocate. Two of the lengths read on a connection — the `Via` address and the
+upgrade protocol name — arrive before any credential has been presented, and
+without a ceiling each is read in full at the announced size. A connection that
+announces more than the ceiling is closed, with one line in the log naming the
+client and the size; the client sees the connection drop rather than a SOAP
+fault, because at that layer there is no message to relate a fault to.
+
+The default matches the `MaxReceivedMessageSize` of the Windows ADWS service,
+documented by Microsoft as 1 MB, so a client that works against a Windows
+domain controller works against this one. Raise it only if a legitimate request
+is refused, and read
+[Troubleshooting § 10](06-depannage.md#10-a-connection-is-closed-on-the-announced-size)
+first.
+
 ## 4. Manual start (debug): under the hood
 
 `install.sh` is nothing more than the automation of the following; to start the

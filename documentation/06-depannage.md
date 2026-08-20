@@ -15,6 +15,7 @@ Errors actually encountered in real runs, with their causes and their fixes.
 | `Unable to find a default server` / ADAC does not connect (`1355`) | [§ ADWS discovery](#7-unable-to-find-a-default-server) |
 | Mutations refused | [§ Insufficient rights](#8-insufficient-rights) |
 | Write with accented characters → `ADServerDownException` / `undefined entity` | [§ Non-ASCII characters](#9-non-ascii-characters-in-a-write) |
+| A connection drops with no fault, log says `[LIMIT]` | [§ Announced size](#10-a-connection-is-closed-on-the-announced-size) |
 
 ---
 
@@ -217,14 +218,38 @@ sudo journalctl -u samba-adws -f | grep -E "fault|RelatesTo"
 
 ### Fix
 
-In `dispatcher._fault()`, **always** bail out through:
+`SoapEnvelope.fault()` has always injected `<a:RelatesTo>{relates_to}</a:RelatesTo>`. The header went out empty because the value did, and this section used to prescribe exactly the line that emptied it:
 
 ```python
-relates_to = context.message_id if context else ""
-return SoapEnvelope.fault(relates_to, "s:Receiver", message)
+relates_to = context.message_id if context else ""      # the defect
 ```
 
-And make sure `SoapEnvelope.fault()` does inject `<a:RelatesTo>{relates_to}</a:RelatesTo>` into the header.
+`context` is `None` whenever the failure happened **before** the request was parsed — a WCF decode error, or XML that does not parse — which is precisely when a fault is most needed. `dispatcher._fault()` now takes the decoded request text as well as the context, and recovers the identifier from the text when there is no context:
+
+```python
+if context is not None:
+    return SoapEnvelope.fault(context.message_id, "s:Receiver", message)
+relates_to = message_id.extract(request)                 # tolerant of unparseable text
+```
+
+`classes/parsing/message_id.py` scans for a `MessageID` element under any prefix without requiring a parseable document. It reads at most the first 8 KB and returns nothing for a value over 256 characters: its input is chosen by the peer and its output goes into a response header.
+
+### The case where nothing can be recovered
+
+If the payload cannot be WCF-decoded at all, there is no text to scan and no identifier anywhere. **The connection is closed rather than answered.** A fault with an empty `RelatesTo` is discarded by the client, which then waits for its own timeout — the very symptom this section describes — so sending one is worse than sending nothing. A closed connection surfaces immediately.
+
+The log says which of the two happened, and for whom:
+
+```
+[DISPATCH] 10.0.0.5:52344 sent a request that did not parse; faulting with the MessageID recovered from its text
+[DISPATCH] 10.0.0.5:52344 sent a request with no recoverable MessageID; closing rather than sending a fault the client would discard
+```
+
+An [MC-NMF] `FaultRecord` was the alternative, and it is not used here: the specification defines no fault name for an undecodable envelope body, and inventing one under a private namespace would tell the client no more than the close does.
+
+### A request that legitimately omits MessageID
+
+WS-Addressing permits it, and such a request parses, so it has a context and takes the first branch above with an empty `relates_to`. That is unchanged and deliberate; it is not the defect described here.
 
 ---
 
@@ -362,6 +387,54 @@ def escapecp(cp):
 
 Verified end to end: `Set-ADUser demo -Description 'créé via ADWS souverain'
 -Replace @{title='Ingénieur Réseau'}` succeeds and the values round-trip intact.
+
+---
+
+## 10. A connection is closed on the announced size
+
+### Symptom
+
+The client's connection drops without an error message from the server, and the
+log carries one line:
+
+```
+[LIMIT] 10.0.0.5:52344 announced 4294967296 bytes, maximum is 1048576
+[LIMIT] 10.0.0.5:52344 refused and disconnected: announced length 4294967296 exceeds maximum 1048576
+```
+
+Or, when the length was not a plausible number at all:
+
+```
+[MESSAGES] ✗ Error: varint longer than 5 bytes
+```
+
+### Cause
+
+Every length a peer announces is bounded before it is read, so that an
+unauthenticated client cannot make the server allocate an arbitrary amount of
+memory by announcing a large one. The ceiling is `ADWS_MAX_MESSAGE_SIZE` in
+`/etc/default/samba-adws`, 1 MB by default. The connection is closed rather than
+answered with a SOAP fault: the violation is detected below the message layer,
+where there is no `MessageID` to put in a `RelatesTo`, and a fault without one
+is ignored by the client anyway (§ 6).
+
+### Fix
+
+If the client is hostile or broken, nothing to do: this is the control working.
+
+If a legitimate request is being refused, the request is genuinely larger than
+1 MB. That is unusual — the ceiling bounds the **request**, not the response, so a
+large `Get-ADUser -Filter *` result is unaffected. A write of a very large
+attribute value can reach it. Raise the ceiling and restart:
+
+```bash
+sudo sed -i 's/^ADWS_MAX_MESSAGE_SIZE=.*/ADWS_MAX_MESSAGE_SIZE=4194304/' /etc/default/samba-adws
+sudo systemctl restart samba-adws
+```
+
+The value only takes effect on restart. Windows ADWS applies the same 1 MB
+default, so a request refused here is a request a Windows domain controller
+would also refuse.
 
 ---
 

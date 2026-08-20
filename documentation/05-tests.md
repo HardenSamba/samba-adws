@@ -1,12 +1,67 @@
 # Tests
 
-Three test suites, at different levels.
+Four levels, in the order to run them.
 
-| Suite | Where | What | When |
-|---|---|---|---|
-| `Test-ADWS-Sovereign.ps1` | Windows | End to end, real PowerShell cmdlets | Final validation |
-| `test_handlers.py` | Linux DC | Handlers in isolation (no network) | Before deployment |
-| `test_adws.py` | Linux DC | Diagnostics (port, imports, parser, …) | First start |
+| Level | Suite | Where | What | When |
+|---|---|---|---|---|
+| 0 | `pytest tests/unit` | Anywhere | The layers that need no directory: WCF, NMF, SOAP envelope, value encoding, request parsing, handler coverage | Every commit |
+| 1 | `pytest tests/dc` | Linux DC | Every registered handler, in isolation, against a real directory | Before deployment |
+| 2 | `tools/test/test_adws.py` | Linux DC | Operator diagnostic: port, imports, parser | First start, and when something is wrong |
+| 3 | `Test-ADWS-Sovereign.ps1` | Windows | End to end, real PowerShell cmdlets | Final validation |
+
+## 0. `pytest` (run this first)
+
+```bash
+python3 -m pytest -q
+```
+
+Levels 0 and 1 are one pytest run. Level 1 carries the `dc` marker and
+`tests/conftest.py` **skips** it when `python3-samba` cannot be imported, so the
+command above passes on a plain Debian box with no directory:
+
+```console
+$ python3 -m pytest -q
+ssssssssssssssssssssssssssssssss........................................
+48 passed, 32 skipped
+```
+
+Skipped, never failed. A red run on a workstation is a real defect, not a
+missing DC.
+
+`python3 -m pytest tests/unit -q` runs only the part that needs nothing.
+
+### What level 0 covers, and the one string it uses
+
+Every write path is fed `créé & <société> "x" 'y'` and the result is **reparsed
+with `xml.etree` and compared to the input**, rather than merely asserted not to
+raise. Non-ASCII has broken this codebase once already: the WCF escaper had to
+stop turning accents into HTML entities that `ElementTree` cannot resolve, and
+that fix is now held by a test that fails if it is reverted.
+
+The same suite pins that a value containing byte `0x01` leaves as
+`xsd:base64Binary` rather than being inserted into XML that cannot carry it.
+
+### Handler coverage
+
+`tests/unit/test_handler_coverage.py` reads the registration keys straight out
+of `src/handlers/handler_routing.py` with `ast` — importing it would pull in the
+directory bindings — and fails when a key has no entry in
+`tests/dc/handler_actions.py`. **Adding a handler without a test fails the
+suite, on any machine.**
+
+### Handlers that touch the directory
+
+Decision: `tests/dc/` uses a **real directory**, not a stub. A fake `SambaDB`
+would have to imitate LDB's `MessageElement` semantics, which is where this
+codebase's bugs actually live (see troubleshooting sections 4 and 9) — a stub
+faithful enough to catch them would be a second implementation to maintain, and
+one that is not would give green tests and broken cmdlets. The cost is that
+level 1 is skipped off a DC, which is why level 0 carries everything testable
+without one.
+
+The registry is built per test through the `registry` fixture, never at module
+level: `python3-samba` is not thread-safe and `CLAUDE.md` section 5 forbids
+opening `SamDB` at import time. That applies to fixtures too.
 
 ---
 
@@ -80,13 +135,13 @@ $results | Where-Object Status -eq Fail | Select-Object Name, Error
 
 ---
 
-## 2. `test_handlers.py` (handlers in isolation)
+## 2. `tests/dc/` (handlers in isolation)
 
 To be run on **the Samba DC**:
 
 ```bash
 cd /root/SambaAD_ADWS
-python3 tools/test/test_handlers.py
+python3 -m pytest tests/dc -q
 ```
 
 Loads the Python handlers directly and passes them hand-built `RequestContext` objects (no NMF, no WCF, no network). Useful to:
@@ -94,6 +149,17 @@ Loads the Python handlers directly and passes them hand-built `RequestContext` o
 - isolate an application bug from a protocol bug,
 - add a regression case without having to deploy everything,
 - iterate quickly while writing a new handler.
+
+Every registered handler is driven here, and each one is asserted to answer
+with XML that parses and whose `<a:RelatesTo>` echoes the request's
+`MessageID` — the invariant of `CLAUDE.md` section 5, and the assertion that
+holds for all twenty-nine without guessing at the shape of each body. A handler
+that needs a richer request than a bare envelope answers with a fault, and a
+fault has to relate to its request too.
+
+This replaces `tools/test/test_handlers.py`, whose three checks moved here. That
+script took a `reg` argument that pytest read as a fixture, so its three checks
+had never run under `pytest`, only through its own `main()`.
 
 ---
 
@@ -178,7 +244,7 @@ by `Search-ADAccount`, tolerated by AD but rejected by ldb) are normalised to
                 └─────────────┬──────────────┘
                               ▼
                 ┌────────────────────────────┐
-                │ 3. test_handlers.py        │  ← isolated logic
+                │ 3. pytest tests/dc         │  ← isolated logic
                 │    on DC                   │
                 └─────────────┬──────────────┘
                               ▼
