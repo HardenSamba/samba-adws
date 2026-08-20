@@ -10,6 +10,7 @@ import socket
 from typing import Any
 
 from src.nettcp import nmf
+from src.nettcp.nmf import MessageSizeExceeded
 from src.nettcp.stream.gssapi import GENSECStream
 from src.nettcp.stream.socket import SocketStream
 
@@ -62,6 +63,8 @@ class ProtocolHandler:
                     self.logger.warning(f"[PREAMBLE] ⚠ Unexpected record code: {code:#04x}")
                     return False
 
+        except MessageSizeExceeded:
+            raise
         except Exception as e:
             self.logger.error(f"[PREAMBLE] ✗ Error: {str(e)}", exc_info=True)
             return False
@@ -100,6 +103,8 @@ class ProtocolHandler:
 
             return True
 
+        except MessageSizeExceeded:
+            raise
         except Exception as e:
             self.logger.error(f"[SECURITY] ✗ Error: {str(e)}", exc_info=True)
             return False
@@ -123,6 +128,8 @@ class ProtocolHandler:
                     except Exception:
                         pass
                     return True
+                except MessageSizeExceeded:
+                    raise
                 except (EOFError, OSError):
                     # Connection closed by client
                     self.logger.info("[MESSAGES] ◀ Connection closed by client\n")
@@ -176,6 +183,8 @@ class ProtocolHandler:
                     self.logger.warning(f"[MESSAGES] ⚠ Unexpected record code: {code:#04x}")
                     return False
 
+        except MessageSizeExceeded:
+            raise
         except Exception as e:
             self.logger.error(f"[MESSAGES] ✗ Error: {str(e)}", exc_info=True)
             return False
