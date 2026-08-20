@@ -8,6 +8,10 @@ language:
   - component: end-to-end test suite
     language: powershell
     reason: Verifying the real Windows client requires running cmdlets on Windows.
+  - component: Samba CLDAP advertisement patch
+    language: c
+    reason: The domain controller locator filters on a flag Samba sets, in a code
+      path no separate daemon can reach.
 installs_on:
 - domain-controller
 requires:
