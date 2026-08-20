@@ -72,7 +72,7 @@ class Record(object):
         return '<%s(%s)>' % (type(self).__name__, ','.join(args))
 
     @classmethod
-    def parse(cls, fp):
+    def parse(cls, fp, strict=False):
         """
         Parses the binary data from fp into Record objects
 
@@ -108,8 +108,11 @@ class Record(object):
                     log.debug('%s found' % Record.records[type].__name__)
                     obj = Record.records[type].parse(fp)
                     if isinstance(obj, EndElementRecord):
+                        last_el = None
                         if len(parents) > 0:
                             records = parents.pop()
+                        elif strict:
+                            raise ValueError('unexpected end element record')
                         #records.append(obj)
                     elif isinstance(obj, Element):
                         last_el = obj
@@ -117,9 +120,15 @@ class Record(object):
                         parents.append(records)
                         obj.childs = []
                         records = obj.childs
-                    elif isinstance(obj, Attribute) and last_el:
-                        last_el.attributes.append(obj)
+                    elif isinstance(obj, Attribute):
+                        if last_el:
+                            last_el.attributes.append(obj)
+                        elif strict:
+                            raise ValueError('attribute record outside element header')
+                        else:
+                            records.append(obj)
                     else:
+                        last_el = None
                         records.append(obj)
                     log.debug('Value: %s' % str(obj))
                 elif type-1 in Record.records:
@@ -130,8 +139,15 @@ class Record(object):
                     last_el = None
                     if len(parents) > 0:
                         records = parents.pop()
+                    elif strict:
+                        raise ValueError('unexpected implicit end element')
                 else:
-                    log.warn('type 0x%x not found' % type)
+                    if strict:
+                        raise ValueError('unknown record type 0x%x' % type)
+                    log.warning('type 0x%x not found' % type)
+
+        if strict and parents:
+            raise ValueError('unclosed element record')
 
         return root
 

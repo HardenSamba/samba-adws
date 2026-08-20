@@ -74,7 +74,12 @@ client ◄─── token #2 (AP-REP)         ──── server
 client ◄─── PreambleEndRecord (0x0c) ───── server   (= security OK)
 ```
 
-The server uses `samba.gensec` (through `src/nettcp/stream/gssapi.py`), so the keytab is **automatically** the Samba one (`/var/lib/samba/private/secrets.tdb`). No separate keytab is needed.
+The server uses `samba.gensec` through the server-side class in
+`src/nettcp/stream/gssapi.py`, so the keytab is **automatically** the Samba one
+(`/var/lib/samba/private/secrets.tdb`). The Linux client uses the initiator in
+the same module and the caller's Kerberos credential cache. Samba imports are
+lazy and occur only when the server acceptor is constructed. No separate client
+keytab is needed.
 
 From that point on, **every message is sealed**: `gss.wrap(payload)` when sending, `gss.unwrap(...)` when receiving. This is invisible to the layers above.
 

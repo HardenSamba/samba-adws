@@ -15,6 +15,13 @@ almost as if it were facing a Microsoft AD (ADAC aside, see [Known limitations](
 admin parity battery **18/18**. The 2 remaining gaps are not server bugs
 (see [Known limitations](#known-limitations)).
 
+> **Security warning:** Kerberos authenticates the remote principal, but the
+> current request path still opens `SamDB` with a SYSTEM session. Caller ACL
+> enforcement is therefore not established. Keep the service restricted to a
+> trusted lab and do not use write operations until
+> [#8](https://github.com/HardenSamba/samba-adws/issues/8) is fixed and proven
+> with live allow/deny tests.
+
 ---
 
 ## Contents
@@ -22,6 +29,7 @@ admin parity battery **18/18**. The 2 remaining gaps are not server bugs
 - [How it works](#how-it-works)
 - [Installing on the Samba DC](#installing-on-the-samba-dc)
 - [Checking that it runs](#checking-that-it-runs)
+- [From Linux: using the Python client](#from-linux-using-the-python-client)
 - [From Windows: querying the directory](#from-windows-querying-the-directory)
 - [From Windows: administering](#from-windows-administering)
 - [Known limitations](#known-limitations)
@@ -36,7 +44,7 @@ Protocol stack (bottom → top), entirely on the Linux side, with no .NET binary
 | Layer | Role | Code |
 |---|---|---|
 | [MS-NMF] | .NET Message Framing | `src/nettcp/nmf.py` |
-| GSSAPI / SPNEGO | Kerberos AES (seal/unseal) via `samba.gensec` | `src/nettcp/stream/gssapi.py` |
+| GSSAPI / SPNEGO | Kerberos AES via client GSSAPI or server `samba.gensec` | `src/nettcp/stream/gssapi.py` |
 | [MS-NBFX/NBFS] | WCF binary XML + dictionary | `src/wcf/` |
 | SOAP 1.2 + WS-Addressing | Application envelope | `classes/soap/`, `src/soap/` |
 | WS-Transfer / WS-Enumeration / IMDA | CRUD, enumeration, AD data model | `classes/handlers/` |
@@ -93,6 +101,34 @@ From a domain-joined Windows workstation:
 Test-NetConnection samba.local -Port 9389     # raw TCP reachability
 Get-ADRootDSE -Server samba.local             # if defaultNamingContext is shown, it works
 ```
+
+---
+
+## From Linux: using the Python client
+
+After `kinit`, Linux callers can retrieve an object without a command-line
+password or a local `SamDB` handle:
+
+```python
+from samba_adws.client import ADWSClient
+
+client = ADWSClient("dc1.samdom.example.com")
+user = client.get_by_dn(
+    "CN=demo,CN=Users,DC=samdom,DC=example,DC=com",
+    ("sAMAccountName", "objectGUID"),
+)
+```
+
+The current public client surface is WS-Transfer Get by distinguished name,
+with optional IMDA property projection. Installation, return-value semantics,
+typed errors, and server-only actions are documented in
+[the Linux client guide](documentation/07-linux-client.md).
+
+> **Authorization limitation:** the server currently authenticates the caller
+> but executes directory operations with a SYSTEM session. The security fix is
+> tracked in [#8](https://github.com/HardenSamba/samba-adws/issues/8). Treat the
+> source client as a read-only integration preview and do not infer caller ACL
+> enforcement from successful Kerberos authentication.
 
 ---
 

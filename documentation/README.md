@@ -8,6 +8,11 @@ Complete index of the project documentation.
 
 → [02-installation.md](02-installation.md), then [05-tests.md § Test-ADWS-Sovereign.ps1](05-tests.md#1-test-adws-sovereignps1-validation-principale).
 
+### I want to call ADWS from Linux
+
+→ [07-linux-client.md](07-linux-client.md) for the supported Python API,
+Kerberos requirements, and current action surface.
+
 ### I want to understand how it is built
 
 → [01-architecture.md](01-architecture.md), then [03-protocole.md](03-protocole.md).
@@ -82,6 +87,12 @@ Complete index of the project documentation.
 - Insufficient rights
 - Enabling DEBUG logs
 - Capturing a full exchange
+
+### [07-linux-client.md](07-linux-client.md)
+- Workstation dependencies and Kerberos credential-cache authentication
+- Public `ADWSClient` and `ADWSClientError` contracts
+- Supported Get-by-DN surface and server-only operations
+- Offline tests and the remaining live validation criterion
 
 ---
 
