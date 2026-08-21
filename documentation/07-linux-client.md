@@ -16,14 +16,16 @@ The client does **not** import or require `python3-samba`, `ldb`, `SamDB`, a
 machine keytab, or a password argument. Use the domain controller's FQDN so
 GSSAPI can request its `host/<fqdn>` service principal.
 
-Authentication and authorization are separate. The current server authenticates
-the Kerberos principal but still opens its request-time `SamDB` with a SYSTEM
-session. [Issue #8](https://github.com/HardenSamba/samba-adws/issues/8) tracks
-binding the accepted GSSAPI identity to Samba's ACL evaluation. Until it is
-fixed and proven live, this source client is a read-only integration preview:
-an unprivileged-user test proves authentication, not enforcement of that user's
-directory rights. Do not expose the service to untrusted domain principals or
-build write clients on this boundary.
+Authorization for writes is enforced by the server once
+[issue #8](https://github.com/HardenSamba/samba-adws/issues/8) is in place: the
+request runs under the caller's GSSAPI session and Samba's local `acl` module
+denies a write the principal has no right for. This client exposes the write
+verbs through `ADWSWriteClient` (see [Write operations](#write-operations)); the
+read-only `ADWSClient` remains available for callers that must not write. Until
+#8 is merged, the server still opens `SamDB` as SYSTEM, so restrict writes to a
+trusted lab. Read requests are not attribute-filtered by the local `SamDB`
+([#17](https://github.com/HardenSamba/samba-adws/issues/17)); a successful read
+does not prove the caller's read rights.
 
 Until Debian packaging is delivered by issue #6, run the client from a source
 checkout. The workstation dependency still comes only from Debian:
@@ -79,6 +81,42 @@ contain the same `RelatesTo`; missing or mismatched correlation, malformed WCF
 or SOAP, and SOAP faults are rejected as typed errors. The configured timeout
 applies to connection, authentication, reads, and writes.
 
+## Write operations
+
+`ADWSWriteClient` extends `ADWSClient` with the directory-changing verbs, so one
+instance both reads and writes. Reads use the same `get_by_dn`; writes map onto
+the server's WS-Transfer and custom-action handlers.
+
+```python
+from samba_adws import ADWSWriteClient
+
+client = ADWSWriteClient("dc1.samdom.example.com")
+parent = "CN=Users,DC=samdom,DC=example,DC=com"
+client.create(f"CN=demo,{parent}", {"objectClass": ["user"], "sAMAccountName": ["demo"]})
+client.set_password(f"CN=demo,{parent}", secret)     # secret rides the sealed body
+client.modify(f"CN=demo,{parent}", {"description": ["set over ADWS"]})
+client.rename(f"CN=demo,{parent}", f"CN=demo2,{parent}")
+client.delete(f"CN=demo2,{parent}")
+```
+
+The stable signatures are:
+
+```python
+create(identity: str, attributes: Mapping[str, Sequence[str]]) -> None
+modify(identity: str, changes: Mapping[str, Sequence[str]]) -> None
+delete(identity: str) -> None
+set_password(identity: str, password: str) -> None
+rename(identity: str, new_dn: str) -> None
+```
+
+`create` splits `identity` into its RDN and parent and posts an `AddRequest` to
+the ResourceFactory endpoint. `modify` replaces each named attribute (an empty
+value sequence clears it). `rename` is an LDAP modrdn carried as a WS-Transfer
+`Put`. `set_password` places the secret inside the request body only — never on
+a command line or in a header — and the transport seals it under GSSAPI. Every
+method returns `None` on success and raises `ADWSClientError` on a SOAP fault or
+a validation error, with the target distinguished name attached.
+
 ## Supported surface
 
 | Surface | Linux client status |
@@ -87,8 +125,9 @@ applies to connection, authentication, reads, and writes.
 | Optional IMDA attribute projection | Supported |
 | SOAP fault decoding | Supported |
 | WS-Enumeration (`Enumerate`, `Pull`, `Release`) | Server-only |
-| Create, Put, Delete, password and group actions | Server-only |
-| Schema and custom actions | Server-only |
+| Create, Put, Delete, rename, SetPassword (`ADWSWriteClient`) | Supported |
+| Group-membership and other custom actions | Server-only |
+| Schema and enumeration-based search | Server-only |
 
 The client currently accepts the static WCF dictionary emitted by this server.
 It rejects a non-empty dynamic dictionary; the server does not negotiate or
