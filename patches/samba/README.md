@@ -57,58 +57,95 @@ is tracked there rather than done from here.
 
 ## Building a patched Samba
 
-Verified against `samba_4.17.12+dfsg-0+deb12u4` on Debian 12.
+Verified on Debian 13 (trixie) against `samba_4.22.10+dfsg-0+deb13u2`, which is
+what the appliance runs. It was first verified on Debian 12 with Samba 4.17.12;
+the differences between the two are recorded below, because the older recipe
+does not work here.
 
 ```console
 # apt-get build-dep -y samba
-# apt-get source samba
-# cd samba-4.17.12+dfsg
+# apt-get source samba=2:4.22.10+dfsg-0+deb13u2
+# cd samba-4.22.10+dfsg
 # patch -p1 < .../0001-advertise-adws-in-the-cldap-netlogon-response.patch
-# DEB_BUILD_OPTIONS=parallel=4 debian/rules build
+patching file source4/dsdb/samdb/ldb_modules/netlogon.c
+Hunk #1 succeeded at 303 (offset 9 lines).
+# DEB_BUILD_OPTIONS=parallel=6 debian/rules build
 ```
 
-`fill_netlogon_samlogon_response()` is compiled into the `DSDB_MODULE_HELPERS`
-subsystem, which is static. There is no single module to swap: it is linked
-into three installed artefacts, and all three have to be replaced.
+Six minutes on twenty cores. The anchor held across five Samba releases, and
+`lp_ctx` is still a parameter of `fill_netlogon_samlogon_response`, which is
+what the call needs.
 
-| Built | Installed |
-|---|---|
-| `bin/default/source4/nbt_server/libservice_module_nbtd.inst.so` | `/usr/lib/$(DEB_HOST_MULTIARCH)/samba/service/nbtd.so` |
-| `bin/default/source4/dsdb/samdb/ldb_modules/libldb_module_rootdse.inst.so` | `/usr/lib/$(DEB_HOST_MULTIARCH)/samba/ldb/rootdse.so` |
-| `bin/default/source4/dsdb/samdb/ldb_modules/libdsdb-module-samba4.inst.so.0` | `/usr/lib/$(DEB_HOST_MULTIARCH)/samba/libdsdb-module-samba4.so.0` |
+### Which files to replace, and how to know
 
-Use the `.inst` variants: they carry the runtime path and soname the installed
-tree expects. Keep the originals — a copy of each is the whole rollback.
+`fill_netlogon_samlogon_response()` is compiled into a static subsystem. There
+is no single module to swap: it is linked into several installed artefacts and
+all of them have to move together. **Do not copy the list from a previous
+release.** On 4.22.10 one of the three from 4.17 does not exist at all —
+`libdsdb-module-samba4.so.0` is now `libdsdb-module-private-samba.so.0`.
 
-Then `systemctl restart samba-ad-dc`.
+Derive it from the build instead. `debian/tmp` is what the package installs,
+already at the right path and with the soname the installed tree expects, so
+there is no mapping to get wrong:
+
+```console
+# cd samba-4.22.10+dfsg
+# find debian/tmp -type f \( -name '*.so' -o -name '*.so.*' \) |
+    while read -r f; do
+        n=$(nm -a "$f" 2>/dev/null | grep -c fill_netlogon_samlogon_response)
+        [ "$n" -gt 0 ] && echo "${f#debian/tmp}"
+    done
+/usr/lib/x86_64-linux-gnu/samba/ldb/rootdse.so
+/usr/lib/x86_64-linux-gnu/samba/libdsdb-module-private-samba.so.0
+/usr/lib/x86_64-linux-gnu/samba/service/nbtd.so
+```
+
+Count the matches rather than testing with `grep -q`: under `set -o pipefail`,
+`grep -q` closes the pipe on its first match, `nm` takes a `SIGPIPE`, and the
+pipeline reports failure precisely when the symbol *is* there.
+
+Copy each to the same path on the controller, keep the originals — a copy of
+each is the whole rollback — and `systemctl restart samba-ad-dc`.
 
 ## Checking that it worked
 
-From a joined Windows machine:
+Two measurements, one on each side. Both were taken on the appliance,
+`HARDENSAMBA.LAB`, Samba `4.22.10-Debian-4.22.10+dfsg-0+deb13u2`, by taking the
+setting away and putting it back.
+
+**On the controller**, the CLDAP netlogon response read through Samba's own
+locator, which is the field the patch changes:
+
+| `adws:advertise` | `server_type` | `NBT_SERVER_ADS_WEB_SERVICE` (0x2000) |
+|---|---|---|
+| absent | `0x000013fd` | not set |
+| `yes` | `0x000033fd` | set |
+
+**On a joined Windows client**, which is the only thing that proves the locator
+filter, because that filter runs there and not on the controller:
 
 ```console
-> nltest /dsgetdc:example.local /ws
+> nltest /dsgetdc:HARDENSAMBA.LAB /ws /force
 ```
 
-Before, the locator finds nothing:
+| `adws:advertise` | Result |
+|---|---|
+| absent | `Status = 1355 0x54b ERROR_NO_SUCH_DOMAIN`, exit 1 |
+| `yes` | the controller, `WS` last in `Flags`, exit 0 |
 
-```
-Status = 1355 0x54b ERROR_NO_SUCH_DOMAIN
-```
+`/force` matters: without it the client answers from its cached locator result
+and says nothing about what the controller advertises now.
 
-After, it returns the controller and `WS` appears at the end of the flags:
+Two ways to fool yourself, both hit while taking these:
 
-```
-Indicateurs : PDC GC DS LDAP KDC TIMESERV GTIMESERV WRITABLE DNS_DC
-              DNS_DOMAIN DNS_FOREST CLOSE_SITE FULL_SECRET WS
-```
-
-The PowerShell module confirms it by the way its failure changes. Before, it
-cannot find a server at all:
-
-> Unable to find a default server with Active Directory Web Services running.
-
-After, it locates the controller and gets as far as authenticating.
+- **Asking `finddc` by address proves nothing.** Given an address it sends a
+  CLDAP ping straight at that host and returns whatever answers; the flags are
+  a request, not a filter. It returned this controller with the bit clear. Read
+  `server_type` from the reply instead.
+- **`-match 'WS'` in PowerShell is case-insensitive**, so it matched the `/ws`
+  in the echoed command line and reported the flag present on a run that had
+  just failed with `ERROR_NO_SUCH_DOMAIN`. Read it off the `Flags:` line, with
+  `-cmatch`.
 
 ## What this does not do
 
@@ -121,12 +158,18 @@ still stands between this module and a working Administrative Center.
 ## Keeping it alive
 
 This patch is applied outside the Debian package, so an update of `samba`
-overwrites the three libraries and the announcement silently stops. Two things
-follow:
+overwrites the libraries and the announcement silently stops, while the
+`smb.conf` line stays exactly where it was. **The presence of the line is not
+evidence that the announcement works.** Two things follow:
 
 - pin or hold `samba`, or rebuild after every upgrade;
-- revalidate on the target Debian release. This was verified on bookworm with
-  Samba 4.17, which is oldstable, while `MODULE.yaml` declares a minimum of
-  4.19. The anchor the patch attaches to has moved between Samba releases
-  before, and `samdb_server_type()` — named in most write-ups on the subject —
-  does not exist here at all.
+- re-derive the file list on every Samba release, not just the patch. The
+  anchor has held so far, but the set of installed artefacts carrying the code
+  has already changed once between 4.17 and 4.22, silently: copying the older
+  list gives two files that exist and one that does not, and a controller that
+  still does not advertise.
+
+`samdb_server_type()`, named in most write-ups on this subject, does not exist
+in Samba at all. Neither does the `0x00100000` those write-ups give as the
+server-side bit; that value is `DS_WEB_SERVICE_REQUIRED`, which is what the
+client sends.
