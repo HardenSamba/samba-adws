@@ -320,27 +320,34 @@ or, on the server side:
 
 ### Cause
 
-Do not currently infer the caller's AD rights from this error. The server
-authenticates the remote principal but opens its request-time `SamDB` with a
-SYSTEM session. [Issue #8](https://github.com/HardenSamba/samba-adws/issues/8)
-tracks propagation of the accepted GSSAPI identity into Samba authorization.
-Until that fix is live-tested, an access error may come from another LDB or
-schema constraint, while an operation that succeeds may have exceeded the
-caller's actual rights.
+For a **write**, this error now reflects the caller's real rights.
+[Issue #8](https://github.com/HardenSamba/samba-adws/issues/8) opens the
+request-time `SamDB` under the caller's GSSAPI session, so Samba's local `acl`
+module denies a create, modify, delete, rename or password reset the principal
+lacks the right for — the same result as direct LDAP. An `InsufficientAccessRights`
+on a write is therefore a genuine authorization decision, not an artefact.
+
+For a **read**, the error is still not a reliable rights signal.
+[Issue #17](https://github.com/HardenSamba/samba-adws/issues/17) tracks the one
+remaining gap: Samba applies read-side ACL filtering (`acl_read`) in its LDAP
+frontend, not on a directly opened local `SamDB`, so a read runs as the caller
+but is not attribute-filtered. A successful read may return attributes the
+caller's ACLs would hide over LDAP.
 
 ### Fix
 
-- Keep ADWS write operations disabled outside a trusted lab until #8 is fixed.
-- Test over direct LDAP as the same principal to establish the expected ACL
-  result independently of ADWS:
+- Writes: the ADWS result matches direct LDAP for the same principal. Confirm the
+  expected outcome over LDAP to distinguish an ACL denial from a schema or
+  constraint error:
 
   ```bash
   ldbedit -H ldap://samba.local -U Administrator \
           -b "CN=cible,CN=Users,DC=samba,DC=local"
   ```
 
-  A different ADWS result is evidence for #8; it is not proof that the direct
-  LDAP ACL result was applied to the ADWS request.
+- Reads: do not infer read rights from ADWS output until #17 is resolved; check
+  the expected attribute visibility over LDAP as the same principal
+  (`ldbsearch -k yes -H ldap://<dc>`).
 
 ---
 

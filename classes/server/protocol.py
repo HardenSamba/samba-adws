@@ -31,6 +31,7 @@ class ProtocolHandler:
         self.negotiated = False
         self.request_index = 0
         self.pending_upgrade: Any = None
+        self.session_info: Any = None
 
     def handle_preamble(self) -> bool:
         """Phase 1: Handle preamble records (codes 0x00-0x0c)"""
@@ -111,6 +112,11 @@ class ProtocolHandler:
             self.stream = GENSECStream(self.stream)
             self.stream.negotiate_server()
             self.negotiated = True
+            self.session_info = self.stream.session_info()
+            if self.session_info is None:
+                self.logger.error(
+                    "[SECURITY] ✗ negotiation left no authenticated session")
+                return False
             self.logger.info("[SECURITY] ✓ GSSAPI negotiation completed\n")
 
             return True

@@ -10,11 +10,6 @@ from typing import Any
 from src.nettcp.nmf import MessageSizeExceeded
 from src.nettcp.stream.socket import SocketStream
 
-try:
-    from samba.auth import system_session
-except ImportError:
-    system_session = None
-
 from classes.handlers.dispatcher import ADWSDispatcher
 from classes.server.limited_stream import LimitedStream
 from classes.server.protocol import ProtocolHandler
@@ -56,9 +51,17 @@ class ConnectionHandler(BaseRequestHandler):
                 self.logger.warning("[SECURITY] Security negotiation failed")
                 return
 
-            # Phase 3: Message exchange with authenticated session
-            # Use system_session for SamDB context - auth is done via GSSAPI
-            session_info = system_session() if system_session else None
+            # Phase 3: Message exchange with the caller's own authenticated
+            # session. A remote request is never served as SYSTEM: without a
+            # session bound to the negotiated principal, Samba could not evaluate
+            # that caller's ACLs, so the connection is refused rather than run
+            # with SYSTEM rights (samba-adws#8).
+            session_info = phase_handler.session_info
+            if session_info is None:
+                self.logger.error(
+                    "[SECURITY] No authenticated session; refusing to serve "
+                    f"{client_ip}:{client_port} as SYSTEM")
+                return
             dispatcher = ADWSDispatcher(
                 self.logger, session_info=session_info,
                 peer=f"{client_ip}:{client_port}")

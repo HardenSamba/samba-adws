@@ -15,12 +15,18 @@ almost as if it were facing a Microsoft AD (ADAC aside, see [Known limitations](
 admin parity battery **18/18**. The 2 remaining gaps are not server bugs
 (see [Known limitations](#known-limitations)).
 
-> **Security warning:** Kerberos authenticates the remote principal, but the
-> current request path still opens `SamDB` with a SYSTEM session. Caller ACL
-> enforcement is therefore not established. Keep the service restricted to a
-> trusted lab and do not use write operations until
-> [#8](https://github.com/HardenSamba/samba-adws/issues/8) is fixed and proven
-> with live allow/deny tests.
+> **Authorization status:**
+> [#8](https://github.com/HardenSamba/samba-adws/issues/8) removed the SYSTEM
+> session: each request opens `SamDB` under the caller's authenticated GSSAPI
+> session, and a connection with no negotiated session is refused rather than run
+> as SYSTEM. **Writes are enforced** as that principal — Samba's local `acl`
+> module denies a create/modify/delete/rename/password reset the caller lacks the
+> right for (proven live with allow/deny tests). **Reads are not yet
+> attribute-filtered:** Samba's `acl_read` filtering runs only in its LDAP
+> frontend, so a directly opened `SamDB` returns attributes a caller's ACLs would
+> hide over LDAP. Reads run as the caller, never SYSTEM, but do not enforce
+> per-attribute read rights —
+> [#17](https://github.com/HardenSamba/samba-adws/issues/17) tracks that gap.
 
 ---
 
@@ -124,11 +130,12 @@ with optional IMDA property projection. Installation, return-value semantics,
 typed errors, and server-only actions are documented in
 [the Linux client guide](documentation/07-linux-client.md).
 
-> **Authorization limitation:** the server currently authenticates the caller
-> but executes directory operations with a SYSTEM session. The security fix is
-> tracked in [#8](https://github.com/HardenSamba/samba-adws/issues/8). Treat the
-> source client as a read-only integration preview and do not infer caller ACL
-> enforcement from successful Kerberos authentication.
+> **Authorization:** the server executes directory operations under the caller's
+> authenticated session, not SYSTEM ([#8](https://github.com/HardenSamba/samba-adws/issues/8)).
+> Writes are ACL-enforced as that principal; reads run as the caller but are not
+> yet attribute-filtered by Samba's `acl_read`
+> ([#17](https://github.com/HardenSamba/samba-adws/issues/17)), so do not infer
+> read rights from a successful read.
 
 ---
 

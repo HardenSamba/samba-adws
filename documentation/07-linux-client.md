@@ -16,14 +16,23 @@ The client does **not** import or require `python3-samba`, `ldb`, `SamDB`, a
 machine keytab, or a password argument. Use the domain controller's FQDN so
 GSSAPI can request its `host/<fqdn>` service principal.
 
-Authentication and authorization are separate. The current server authenticates
-the Kerberos principal but still opens its request-time `SamDB` with a SYSTEM
-session. [Issue #8](https://github.com/HardenSamba/samba-adws/issues/8) tracks
-binding the accepted GSSAPI identity to Samba's ACL evaluation. Until it is
-fixed and proven live, this source client is a read-only integration preview:
-an unprivileged-user test proves authentication, not enforcement of that user's
-directory rights. Do not expose the service to untrusted domain principals or
-build write clients on this boundary.
+Authentication and authorization are now bound.
+[Issue #8](https://github.com/HardenSamba/samba-adws/issues/8) removed the SYSTEM
+session: the server opens each request-time `SamDB` under the session the GSSAPI
+handshake authenticated, and refuses the connection if no session was negotiated
+rather than falling back to SYSTEM. **Writes are enforced as that principal** —
+Samba's local `acl` module denies a create, modify, delete, rename or password
+reset the caller has no directory right to (proven live: an unprivileged user is
+refused with "no write property access"). This makes the boundary safe to build
+write clients on.
+
+One authorization gap remains, tracked by
+[issue #17](https://github.com/HardenSamba/samba-adws/issues/17): **reads are not
+attribute-filtered**. Samba applies read-side ACL filtering (`acl_read`) in its
+LDAP frontend, not on a directly opened local `SamDB`, so a caller can read
+attributes their ACLs would hide over LDAP. Reads run as the caller (never
+SYSTEM), but do not yet enforce per-attribute read rights; treat read output as
+if the caller could read anything the directory returns to a local process.
 
 Until Debian packaging is delivered by issue #6, run the client from a source
 checkout. The workstation dependency still comes only from Debian:
