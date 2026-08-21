@@ -23,7 +23,7 @@ Forwarded: not-needed
 Last-Update: 2026-08-20
 --- a/source4/dsdb/samdb/ldb_modules/netlogon.c
 +++ b/source4/dsdb/samdb/ldb_modules/netlogon.c
-@@ -294,6 +294,15 @@
+@@ -294,6 +294,14 @@
  		}
  	}
 
