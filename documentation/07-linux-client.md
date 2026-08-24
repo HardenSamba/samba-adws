@@ -176,3 +176,58 @@ imports `ldb` and cannot be loaded on a machine without Samba. One test reads
 that file and checks the elements this client looks for are the elements it
 writes. It is coarse, and it catches the rename that would otherwise be found by
 an administrator looking at an empty screen.
+
+## The `samba-adws` command
+
+`MODULE.yaml` has declared a command of that name since it was written, and
+there was none. There is now, and it exists so that another module can reach
+this one **without importing it**.
+
+That is the ecosystem's rule rather than a preference: a module owns its
+behaviour and its consumers render it, and a consumer that imported this
+package would be holding this module's code in its own process — with
+`python3-samba` underneath, which is not thread-safe and is why the server
+forks rather than threads.
+
+```bash
+samba-adws search --server dc.example.test     --base "OU=Staff,DC=example,DC=test"     --scope OneLevel     --filter "(objectClass=user)"     --properties sAMAccountName,displayName,whenChanged     --count 50
+```
+
+```json
+{"objects":[{"sAMAccountName":"m.dupont","displayName":"Marie Dupont"}],"cursor":"ctx-2"}
+```
+
+**One page per invocation.** A command that ran a subtree search to completion
+would hold a controller for as long as the domain is large and hand its caller
+forty thousand objects at once. The caller pages by asking again with the
+cursor it was given:
+
+```bash
+samba-adws search --server dc.example.test --base "..." --cursor ctx-2
+```
+
+An empty `cursor` is the end of the sequence. An empty `objects` is **not**: a
+server may answer a short page, or an empty one, before its last.
+
+**The attributes are the directory's own.** They arrive as the server named them
+and leave unchanged. A consumer wanting different names would be asking this
+command to hold its vocabulary, and there is more than one consumer.
+
+### What a consumer can rely on
+
+| | |
+|---|---|
+| Success | exit `0`, one JSON document on stdout, stderr empty |
+| Failure | non-zero exit, the reason on stderr, **stdout empty** |
+| Bad arguments | exit `2` from the parser, before anything is opened |
+
+stdout is left empty on failure deliberately. A consumer that parsed it on a
+non-zero status would be reading a shape this command does not promise, and one
+that did not would find half a page.
+
+### Read only, for now
+
+`search` is the verb `hardensamba-webui#9` and `#20` were blocked on. The write
+verbs exist on `ADWSWriteClient` and are not exposed here yet: a command that
+can delete an account needs a decision about which identity it acts as, and
+that is `#8`.
