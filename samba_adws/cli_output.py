@@ -15,6 +15,8 @@ import json
 import sys
 from typing import Any, Mapping
 
+from samba_adws import cli_text
+
 # What a consumer sees when the command worked and when it did not.
 OK = 0
 FAILED = 1
@@ -25,6 +27,19 @@ def answer(payload: Mapping[str, Any]) -> int:
     json.dump(payload, sys.stdout, ensure_ascii=False, separators=(",", ":"))
     sys.stdout.write("\n")
     return OK
+
+
+# The same answer in whichever form the caller asked for.
+#
+# json is the default, and that is this module's decision rather than the
+# ecosystem's: the consumer is another module running this as a subprocess, and
+# the one verb that existed before this flag has always printed JSON. A text
+# default would have changed what every caller written before it receives.
+def emit(payload: Mapping[str, Any], wanted: str) -> int:
+    if wanted == "text":
+        sys.stdout.write(cli_text.render(payload) + "\n")
+        return OK
+    return answer(payload)
 
 
 # Writes one reason to stderr, leaving stdout empty, and returns the failure.
