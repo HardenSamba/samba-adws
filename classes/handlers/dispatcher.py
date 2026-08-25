@@ -11,8 +11,13 @@ from classes.parsing.context import RequestContext
 from classes.soap.soap_envelope import SoapEnvelope
 
 
+# Routes one decoded message to the handler that owns its action, and turns
+# anything that goes wrong into a SOAP fault the client can relate to the
+# request it sent.
 class ADWSDispatcher:
 
+    # Holds the logger, the caller's authenticated session and the registry of
+    # handlers for the length of one connection.
     def __init__(self, logger: logging.Logger, session_info: Any = None,
                  peer: str = "") -> None:
         self.logger = logger
@@ -20,6 +25,9 @@ class ADWSDispatcher:
         self.peer = peer
         self.registry = HandlerRegistry(logger, session_info)
 
+    # Decodes one message, invokes the handler for its action and returns the
+    # encoded response, or a fault. The decoded text is kept so that a request
+    # which never parsed can still be answered with its own MessageID.
     def dispatch(self, record: Any, index: int) -> bytes:
         self.logger.info(f"[DISPATCH] message #{index}")
         context: Optional[RequestContext] = None
@@ -38,6 +46,8 @@ class ADWSDispatcher:
             self.logger.exception("[DISPATCH] unexpected failure")
             return self._encode_response(self._fault(context, str(e), request))
 
+    # Resolves the action to its handler and returns what that handler
+    # rendered, or raises when no handler claims the action.
     def _invoke(self, context: RequestContext) -> str:
         handler = self.registry.resolve(context.action)
         if handler is None:
@@ -46,6 +56,8 @@ class ADWSDispatcher:
         self.logger.info(f"[DISPATCH] handler={handler.__class__.__name__}")
         return handler.handle(context)
 
+    # Encodes one response as WCF binary XML behind the leading record byte
+    # the framing expects.
     @staticmethod
     def _encode_response(response_xml: str) -> bytes:
         records: Any = XMLParser.parse(response_xml)
