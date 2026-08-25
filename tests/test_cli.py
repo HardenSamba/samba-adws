@@ -151,3 +151,70 @@ def test_the_attributes_keep_the_names_the_directory_gave_them(
     _, out, _ = run(monkeypatch, capsys)
 
     assert "sAMAccountName" in json.loads(out)["objects"][0]
+
+
+# STATUS ANSWERS ONE JSON DOCUMENT, WHICH IS THE WHOLE POINT OF IT.
+#
+# `hardensamba-webui` probed this module with `search --help`, chosen for the
+# right reason and unable to work: argparse prints help as text and that console
+# parses stdout as JSON, so a module that was working perfectly read as
+# installed and not answering. samba-adws#25.
+def test_status_is_one_json_document_and_a_zero_status(capsys: Any) -> None:
+    status, out, err = run(None, capsys, ["status"])
+
+    assert status == 0
+    assert err == ""
+    said = json.loads(out)
+    assert said["module"] == "samba-adws"
+    assert "search" in said["verbs"]
+
+
+# It opens nothing: a probe must not need a base, a query or a credential.
+def test_status_never_touches_the_network(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    transport = install(monkeypatch, one_page)
+    run(None, capsys, ["status"])
+
+    assert transport.requests == []
+
+
+# BOTH ORDERINGS OF --format PARSE.
+#
+# argparse gives a subparser's default priority over whatever the root already
+# parsed, so a real default would silently produce json for
+# `samba-adws --format text status` — and that is the position a person writes
+# first. The flag is declared with SUPPRESS on a parent both levels inherit.
+@pytest.mark.parametrize("argv", [["--format", "text", "status"],
+                                  ["status", "--format", "text"]])
+def test_the_format_flag_works_on_either_side_of_the_verb(
+    capsys: Any, argv: List[str]
+) -> None:
+    status, out, _ = run(None, capsys, argv)
+
+    assert status == 0
+    assert out.startswith("module: samba-adws")
+
+
+# json remains the default, because every caller written before the flag
+# receives what it always received.
+def test_json_is_still_what_a_caller_gets_without_asking(capsys: Any) -> None:
+    _, out, _ = run(None, capsys, ["status"])
+    assert json.loads(out)
+
+
+# The version it reports is the version the manifest declares.
+#
+# A probe cannot read `MODULE.yaml`, so the number is held in the package as
+# well — and two copies of a fact drift unless something holds them together.
+def test_the_reported_version_is_the_one_the_manifest_declares() -> None:
+    import re
+    from pathlib import Path
+
+    from samba_adws import __version__
+
+    manifest = (Path(__file__).resolve().parent.parent / "MODULE.yaml").read_text(encoding="utf-8")
+    declared = re.search(r"^version:\s*(\S+)\s*$", manifest, re.MULTILINE)
+
+    assert declared is not None, "MODULE.yaml declares no version"
+    assert declared.group(1).strip("'\"") == __version__
