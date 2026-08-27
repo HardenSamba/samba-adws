@@ -88,7 +88,9 @@ applies to connection, authentication, reads, and writes.
 | SOAP fault decoding | Supported |
 | WS-Enumeration `Enumerate` and `Pull` | Supported |
 | WS-Enumeration `Release` | Server-only |
-| Create, Put, Delete, password and group actions | Server-only |
+| WS-Transfer `Create`, `Put`, `Delete` | Supported |
+| `SetPassword` account management action | Supported |
+| Group membership and schema actions | Server-only |
 | Schema and custom actions | Server-only |
 
 The client currently accepts the static WCF dictionary emitted by this server.
@@ -177,6 +179,96 @@ that file and checks the elements this client looks for are the elements it
 writes. It is coarse, and it catches the rename that would otherwise be found by
 an administrator looking at an empty screen.
 
+## Writing
+
+`ADWSWriteClient` extends the search client with the three WS-Transfer actions
+and the account management one. The handlers have answered all four since phase
+1; what was missing was never the capability, only a way for a Linux caller to
+reach it. That is `#16`.
+
+> **Every write reaches the directory with SYSTEM rights, whoever sent it.**
+> `classes/server/connection.py:61` builds `system_session()` once GSSAPI has
+> succeeded, so the authenticated principal is authenticated and then discarded.
+> A caller who may not modify an object modifies it anyway, and the client
+> cannot tell, because the directory answered yes. That is `#8`, it is open,
+> and until it closes this client belongs only to a consumer that does its own
+> authorization. It is why the verbs are on the class and not on the command.
+
+```python
+from samba_adws import ADWSWriteClient, NewUser, create_user
+
+client = ADWSWriteClient("dc1.samdom.example.com")
+made = client.create(
+    "CN=demo",
+    "OU=Staff,DC=samdom,DC=example,DC=com",
+    {"objectClass": "user", "sAMAccountName": "demo"},
+)
+client.modify(made["distinguishedName"], "displayName", "Demo Account")
+client.delete(made["distinguishedName"])
+```
+
+The stable signatures are:
+
+```python
+create(rdn: str, parent: str, attributes: Mapping[str, object]) -> Dict[str, str]
+modify(identity: str, name: str, value: object) -> None
+set_password(identity: str, password: str) -> None
+delete(identity: str) -> None
+```
+
+`create` answers with the composed `distinguishedName` and the `objectGUID` the
+server reported. A create the server acknowledged without naming the object is
+an error rather than a record with an empty identifier: a caller would store
+that and come back to it later to find nothing there.
+
+**A create sends the relative name and the parent, never an assembled one.**
+`CreateHandler._resolve_dn` composes the distinguished name from the two, which
+is what a Windows client lets it do. A client that assembled the name itself
+would be deciding how a directory spells one, and those rules are RFC 4514's.
+
+**Every value is escaped where it enters the document.** These are attribute
+values an administrator typed. A name carrying `&` produces a request the server
+cannot parse; one carrying `<` produces a request it parses differently from
+what was meant, which is worse.
+
+### Making an account usable is three exchanges
+
+`create_user` holds the order, because the order is the part worth reading.
+
+| | Exchange | Why not sooner |
+|---|---|---|
+| 1 | WS-Transfer `Create` | — |
+| 2 | `SetPassword` | there is no object to set it on until 1 has answered |
+| 3 | `Put userAccountControl=512` | a directory refuses to enable an account that has no password |
+
+```python
+account = create_user(client, NewUser(
+    name="demo",
+    parent="OU=Staff,DC=samdom,DC=example,DC=com",
+    attributes={"objectClass": "user", "sAMAccountName": "demo"},
+    password=secret,
+    enable=True,
+))
+```
+
+**It reports how far it got.** `passwordSet` and `enabled` are in the answer,
+because an account created and left disabled is a different outcome from one
+that failed, and telling them apart is the difference between an administrator
+finishing the job and starting it again. Asking to enable an account with no
+password enables nothing and says so, rather than sending a request the
+directory would refuse.
+
+**The password is in the exchange that sets it and in no other.** Not in the
+create, not in the returned record, not in any error raised on the way. Folding
+it into the create would send it where the server does not read it from: the
+account would exist, the caller would be told the password was set, and nobody
+would find out until somebody failed to sign in.
+
+Offline tests cover all of it. The request direction is checked by handing the
+bytes this client builds to `classes/parsing/body_parser.py` and
+`classes/parsing/context.py` — the code that reads them on the other side —
+rather than to a parser written in the tests, which would agree with itself.
+
 ## The `samba-adws` command
 
 `MODULE.yaml` has declared a command of that name since it was written, and
@@ -225,9 +317,17 @@ stdout is left empty on failure deliberately. A consumer that parsed it on a
 non-zero status would be reading a shape this command does not promise, and one
 that did not would find half a page.
 
-### Read only, for now
+### Read only, and the reason is checked rather than assumed
 
 `search` is the verb `hardensamba-webui#9` and `#20` were blocked on. The write
-verbs exist on `ADWSWriteClient` and are not exposed here yet: a command that
-can delete an account needs a decision about which identity it acts as, and
-that is `#8`.
+verbs exist on `ADWSWriteClient` as of `#16` and are still not exposed here.
+
+The reason is the one above: the server discards the authenticated principal
+and opens the directory with `system_session()`. A `delete` verb on a command
+that any ticket-holder can run would therefore let any ticket-holder remove any
+object in the domain. Exposing it would not be adding a verb; it would be
+turning "can reach the DC" into "can empty it".
+
+`#8` closes that. Until it does, the verbs stay on the class, where a caller has
+to mean it and where the one consumer that has them — `hardensamba-webui` — is
+doing its own authorization on the way in.

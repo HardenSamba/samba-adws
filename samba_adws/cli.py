@@ -10,10 +10,14 @@ not thread-safe and is why the server forks rather than threads.
 **One page per invocation.** See `cli_search`. The caller pages by asking again
 with the cursor it was given.
 
-**Read only, for now.** `search` is the verb `hardensamba-webui#9` and
-`samba-adws#20` were blocked on; the write verbs exist on `ADWSWriteClient` and
-are not exposed here yet, because a command that can delete an account needs a
-decision about which identity it acts as that `samba-adws#8` has not made.
+**Read only, and the reason is checked rather than assumed.** `search` is the
+verb `hardensamba-webui#9` and `samba-adws#20` were blocked on. `ADWSWriteClient`
+exists as of `samba-adws#16`, and its verbs are still not exposed here:
+`classes/server/connection.py:61` builds `system_session()` once GSSAPI has
+succeeded, so every request reaches the directory with SYSTEM rights whoever
+sent it. A `delete` verb on a command any ticket-holder can run would therefore
+remove any object in the directory. That is `samba-adws#8`, and until it closes
+the verbs stay on the class, where a caller has to mean it.
 
 **`status` exists so that a consumer can ask whether this command answers.**
 It opens nothing. `hardensamba-webui` probed with `search --help`, chosen
@@ -31,7 +35,6 @@ from samba_adws.errors import ADWSClientError
 from samba_adws.search_client import ADWSSearchClient
 
 DEFAULT_PORT = 9389
-
 
 
 # Declares the arguments `search` takes.

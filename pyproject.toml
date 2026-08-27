@@ -16,7 +16,12 @@ select = ["E", "F", "W", "I", "N", "B", "C4", "UP"]
 # Keep the codebase's typing-module style (Dict/List/Optional) instead of
 # forcing PEP 585/604 builtins — consistent with the existing code.
 # N818: the exception hierarchy deliberately uses the `Exception` suffix.
-ignore = ["UP006", "UP007", "UP035", "UP045", "N818"]
+# UP045 belongs on that list and is not on it: it does not exist in the ruff
+# this repository pins (0.8.6), and naming a rule ruff does not know is a TOML
+# parse error, not a warning. The hook therefore aborted before linting
+# anything, on every commit since the entry was added. samba-adws#29 bumps the
+# pin and puts it back with the 48 findings a current ruff reports.
+ignore = ["UP006", "UP007", "UP035", "N818"]
 
 [tool.mypy]
 # Full typing is the norm: strict, checked against the Linux runtime
