@@ -320,27 +320,46 @@ or, on the server side:
 
 ### Cause
 
-Do not currently infer the caller's AD rights from this error. The server
-authenticates the remote principal but opens its request-time `SamDB` with a
-SYSTEM session. [Issue #8](https://github.com/HardenSamba/samba-adws/issues/8)
-tracks propagation of the accepted GSSAPI identity into Samba authorization.
-Until that fix is live-tested, an access error may come from another LDB or
-schema constraint, while an operation that succeeds may have exceeded the
-caller's actual rights.
+**This error now means what it says: the caller does not have the right.**
+
+That was not true before [#8](https://github.com/HardenSamba/samba-adws/issues/8).
+The server authenticated the remote principal and then opened its request-time
+`SamDB` with a SYSTEM session, so no ACL in the domain was ever evaluated
+against the caller. An access error came from somewhere else entirely — an LDB
+constraint, the schema — and, far worse, an operation that *succeeded* may have
+been one the caller had no right to perform.
+
+Since #8, every request opens the directory as the principal that authenticated
+it, and there is no fallback: a connection whose negotiation produced no session
+is closed before anything is dispatched, and `SambaDB` refuses to open at all
+without one.
+
+So this is now a genuine ACL result, and the remaining causes are the ordinary
+ones: the object is protected by `adminCount`, the principal is missing a
+delegated right on the container, or the attribute is one only SYSTEM writes.
 
 ### Fix
 
-- Keep ADWS write operations disabled outside a trusted lab until #8 is fixed.
-- Test over direct LDAP as the same principal to establish the expected ACL
-  result independently of ADWS:
+- Check the caller's rights on the target object, as you would for any LDAP
+  client. `ldbedit` as the same principal should now give the *same* answer:
 
   ```bash
-  ldbedit -H ldap://samba.local -U Administrator \
+  ldbedit -H ldap://samba.local -U the.caller \
           -b "CN=cible,CN=Users,DC=samba,DC=local"
   ```
 
-  A different ADWS result is evidence for #8; it is not proof that the direct
-  LDAP ACL result was applied to the ADWS request.
+  A difference between the two is now a bug worth reporting, rather than the
+  expected discrepancy it used to be.
+
+- The server log names who each connection ran as:
+
+  ```
+  [SECURITY] 10.0.0.7:51322 authenticated as EXAMPLE\m.dupont
+  ```
+
+  If that line is missing, the connection was refused before anything was
+  dispatched: the negotiation produced no session. That is a different problem
+  from a denied write, and it is logged as one.
 
 ---
 

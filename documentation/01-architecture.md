@@ -106,8 +106,11 @@ See [04-handlers.md](04-handlers.md) for the complete list.
 | File | Role |
 |---|---|
 | `server.py` | `socketserver.ForkingTCPServer` listening on 9389/tcp |
-| `connection.py` | For each connection: preamble → GSSAPI upgrade → message loop |
+| `connection.py` | For each connection: preamble → GSSAPI upgrade → **identity** → message loop |
+| `identity.py` | The authenticated session, or a refusal. Never a fallback |
 | `protocol.py` | State machine for the NMF protocol phases |
+
+> **Important:** every request runs as the principal that authenticated it. `SambaDB` is opened with that session and with no other; there is no default and no fallback. The one place that can produce a SYSTEM session is `classes/directory/maintenance.py`, and the only callers are the start-up backend check and the DC diagnostic — neither of which is a remote request. `tests/unit/test_system_session_is_local_only.py` holds that shape: it fails if any file under `classes/` or `src/` other than that one so much as names `system_session`.
 
 > **Important:** `ForkingTCPServer` means that **each connection is a separate process**. Any resource (the `SamDB` cache, the WCF dictionaries) must be opened **inside the handler**, not at module level, otherwise it is shared between forks and the locks break.
 
@@ -118,12 +121,13 @@ Example: `Get-ADUser Administrator`.
 1. **On the Windows side** — The `ActiveDirectory` module opens a `net.tcp` connection to `samba.local:9389`.
 2. **Preamble (Phase 1)** — `VersionRecord`, `ModeRecord`, `ViaRecord`, `KnownEncodingRecord`, `UpgradeRequestRecord` are sent in sequence. The server validates each record in `classes/server/protocol.py`.
 3. **Security (Phase 2)** — The client switches to a TLS-like mode through GSSAPI. Several `update()` round trips take place until a Kerberos context is obtained. From that point on, every message is sealed (`wrap` / `unwrap`).
-4. **SOAP message** — The client sends a WCF binary payload.
-5. **Decoding** — `nettcp` reads the record and extracts the encrypted payload, GSSAPI decrypts it, and `src/wcf/xml2records.py` turns it into XML text.
-6. **Routing** — `RequestContext.from_xml(xml)` extracts the action (`http://schemas.xmlsoap.org/ws/2004/09/transfer/Get`), the message ID and the target DN. `HandlerRegistry.resolve()` returns `GetHandler`.
-7. **Execution** — `GetHandler.handle()` calls `samba.samdb.search()` and formats the result depending on whether the request is in **WS-Transfer** mode (a single `<addata:user>...</addata:user>`) or **IMDA** mode (each attribute in its own `<da:PartialAttribute>`).
-8. **Response encoding** — SOAP XML → WCF records → GSSAPI-sealed bytes → Net.tcp frame.
-9. **On the Windows side** — `Get-ADUser` receives the object, deserialises it and displays it.
+4. **Identity** — `classes/server/identity.py` reads the authenticated session off the negotiated context (`gensec.Security.session_info()`), which is the only place the caller exists once the handshake is over: the stream carries bytes from then on, and no request repeats who sent it. A negotiation that produced no session ends the connection here. Nothing is dispatched without one.
+5. **SOAP message** — The client sends a WCF binary payload.
+6. **Decoding** — `nettcp` reads the record and extracts the encrypted payload, GSSAPI decrypts it, and `src/wcf/xml2records.py` turns it into XML text.
+7. **Routing** — `RequestContext.from_xml(xml)` extracts the action (`http://schemas.xmlsoap.org/ws/2004/09/transfer/Get`), the message ID and the target DN. `HandlerRegistry.resolve()` returns `GetHandler`.
+8. **Execution** — `GetHandler.handle()` calls `samba.samdb.search()` and formats the result depending on whether the request is in **WS-Transfer** mode (a single `<addata:user>...</addata:user>`) or **IMDA** mode (each attribute in its own `<da:PartialAttribute>`).
+9. **Response encoding** — SOAP XML → WCF records → GSSAPI-sealed bytes → Net.tcp frame.
+10. **On the Windows side** — `Get-ADUser` receives the object, deserialises it and displays it.
 
 Every server-side error is converted into a **SOAP fault** by the dispatcher (with `<a:Action>` and `<a:RelatesTo>` referring back to the original `MessageID`; without them, PowerShell ignores the response).
 

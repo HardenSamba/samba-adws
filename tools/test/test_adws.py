@@ -38,7 +38,8 @@ def check_imports() -> Result:
 def check_samdb() -> Result:
     try:
         from classes.directory import SambaDB
-        db = SambaDB(logging.getLogger("diag"))
+        from classes.directory.maintenance import local_session
+        db = SambaDB(logging.getLogger("diag"), session_info=local_session())
         nc = db.naming_context()
         return ("SamDB connect", bool(nc), f"defaultNC={nc!r}")
     except Exception as exc:
