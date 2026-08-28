@@ -115,6 +115,12 @@ class GENSECStream:
 
         self.settings["target_hostname"] = self.lp_ctx.get("netbios name")
 
+    def session_info(self):
+        """The authenticated session bound to the negotiated principal, or None."""
+        if self.client_ctx is None:
+            return None
+        return self.client_ctx.session_info()
+
     def negotiate_server(self):
         from samba import auth, gensec
         from samba.credentials import Credentials
