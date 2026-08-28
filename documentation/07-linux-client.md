@@ -155,6 +155,96 @@ widest of the three, so a caller who mistyped one level would silently search a
 whole domain and get an answer that does not look wrong. `search_query` refuses
 a scope outside the three before a socket is opened.
 
+### A base may be a GUID as well as a distinguished name
+
+A distinguished name is a **position**, not an identity.
+`OU=Staff,OU=Paris,DC=example,DC=test` stops existing the moment somebody
+renames `OU=Paris` or moves `OU=Staff` under another container, and every saved
+view a console stored that way breaks silently. An `objectGUID` never changes,
+which is why `hardensamba-webui` holds GUIDs and needs to hand one back as a
+search base.
+
+`search_query` therefore accepts three spellings of `base`, and so does
+`samba-adws search --base`:
+
+| Typed | Sent |
+|---|---|
+| `OU=Staff,DC=example,DC=test` | unchanged |
+| `<GUID=6c8dd5f1-6b3c-4f1a-9d33-6b1f0a2e77aa>` | unchanged |
+| `6c8dd5f1-…` or `{6c8dd5f1-…}` | `<GUID=6c8dd5f1-…>` |
+
+Surrounding whitespace is trimmed from all three, because `search_query` is
+what decides the text that goes on the wire and a pasted DN should not carry
+spaces that a pasted GUID would have lost.
+
+```python
+query = search_query(base="<GUID=6c8dd5f1-6b3c-4f1a-9d33-6b1f0a2e77aa>",
+                     scope="OneLevel")
+```
+
+`<GUID=…>` is LDAP's own extended-DN form, not something invented here.
+Normalising a bare GUID guesses nothing: a bare GUID contains no `=` and can
+therefore never have been a distinguished name. Anything that is neither is
+passed through untouched — this boundary recognises a GUID, it does not judge a
+DN. Active Directory's three-part extended DN,
+`<GUID=…>;<SID=…>;OU=Staff,DC=example,DC=test`, is one of those: it already
+carries a distinguished name, so it is passed on rather than rewritten.
+
+A base that opens with `<GUID=` and does not carry a GUID is refused as
+`InvalidArgument` before a socket is opened, for the same reason an unknown
+scope is: a `Search failed` fault that travelled to a domain controller first
+names neither the value nor the reason. A half-copied `{6c8dd5f1-…` — an
+opening brace with no closing one — is not repaired into a GUID either; it is
+not the shape a directory prints, so it is not read as one.
+
+`ADWSClient.get_by_dn` is **not** covered by this. Its `identity` is still a
+distinguished name; `classes/handlers/get.py` converts only the RootDSE
+sentinel GUID and answers `Object not found` for any other, which
+`tools/docgen/chapters/06-operations.md` records as a deliberate divergence
+from the Microsoft server.
+
+**What is proven, and what is not.** The client escapes the base once
+(`samba_adws/_search_request.py`, inside `<adlq:BaseObject>`), the WCF text
+record escapes it again (`src/wcf/records/text.py`), and the server's own
+parser reads back the exact string `<GUID=…>`
+(`classes/parsing/context_enumeration.py`). `tests/test_client_search.py` and
+`tests/test_cli.py` assert that round trip on the bytes the client really
+builds, so **transport of a GUID base is verified offline**. `EnumerateHandler`
+then hands `base_dn` to `SamDB.search(base=…)` with no DN parsing of its own
+(`classes/handlers/enumerate.py`).
+
+**Resolution of the extended base is Samba's `ldb`, and this repository has not
+observed it.** No test here can: `classes/handlers/enumerate.py` imports `ldb`,
+which is absent from a workstation, and no capture in `tools/test/` exercises a
+GUID identity. That `<GUID=…>` is LDB syntax is corroborated in-repo by
+`tools/docgen/chapters/06-operations.md`, which says the Get handler declines to
+use it — evidence the form exists, not evidence it resolves as a search base.
+Treat "the DC accepts a GUID base" as a **deduction pending a live check**
+against a domain controller, not as an observed fact. That the client accepts,
+normalises and transmits one is observed.
+
+**The fallback needs no extended-DN support at all**, and it is also how a
+console turns a GUID into a DN the first time it sees one:
+
+```bash
+samba-adws search --server dc1.samdom.example.com \
+  --base "DC=samdom,DC=example,DC=com" --scope Subtree \
+  --filter "(objectGUID=6c8dd5f1-6b3c-4f1a-9d33-6b1f0a2e77aa)" \
+  --properties distinguishedName
+```
+
+`FilterParser` passes that assertion through unchanged, and
+`src/serialization/name_filters.py` already builds the identical filter for
+`TranslateName`, so it is exercised by an existing server path. The client does
+**not** fall back to it automatically, for the same reason it refuses an unknown
+scope rather than widening it to `Subtree`: turning one caller's failed lookup
+into a subtree search of the domain is a decision the caller has to make.
+`samba_adws.is_guid_base` is exported so a consumer can tell which case it is
+holding before it decides. It answers `True` exactly when `search_query` would
+rewrite the base into `<GUID=…>`, malformed values included in the sense that
+they answer `False`, so the branch it selects cannot raise the `InvalidArgument`
+the predicate had just ruled out.
+
 ### The endpoint is `Windows/Enumeration`
 
 The published WCF endpoint table gives that path for the `IEnumeration`

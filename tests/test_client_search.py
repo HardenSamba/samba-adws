@@ -24,6 +24,7 @@ import pytest
 
 from classes.parsing.context_enumeration import read_enumerate, read_pull_release
 from samba_adws._codec import decode_xml, encode_xml
+from samba_adws._search_base import is_guid_base
 from samba_adws._search_request import (
     ENUMERATE_RESPONSE_ACTION,
     PULL_RESPONSE_ACTION,
@@ -38,6 +39,8 @@ from tests.client_helpers import install_transport
 
 SERVER = "dc.example.test"
 BASE = "OU=Staff,OU=Paris,DC=example,DC=test"
+GUID = "6c8dd5f1-6b3c-4f1a-9d33-6b1f0a2e77aa"
+GUID_BASE = f"<GUID={GUID}>"
 NAMESPACES = (
     f'xmlns:s="{SOAP_ENV}" xmlns:a="{WSA}" xmlns:wsen="{WSEN}" '
     f'xmlns:ad="{AD}" xmlns:addata="{ADDATA}" xmlns:adlq="{ADLQ}" '
@@ -237,6 +240,56 @@ def test_a_meaningless_page_size_is_refused(count: object) -> None:
 def test_an_empty_base_is_refused() -> None:
     with pytest.raises(ADWSClientError):
         search_query("")
+
+
+# A GUID base survives the codec and arrives as the server's parser reads it.
+#
+# The whole point of the extended form is that it is ordinary text: the client
+# escapes `<` and `>`, the WCF codec escapes them again, and ElementTree undoes
+# both. This asserts on the string `EnumerateHandler` would hand to `ldb`.
+def test_a_guid_base_reaches_the_server_intact() -> None:
+    query = search_query(GUID_BASE, "OneLevel")
+    request, _ = build_enumerate_request(SERVER, 9389, query)
+    values = read_enumerate(ET.fromstring(decode_xml(encode_xml(request))))
+    assert values["base_dn"] == GUID_BASE
+
+
+# The spellings a console actually holds all become the one wire form.
+#
+# A bare GUID contains no `=` and can never have been a distinguished name, so
+# normalising it guesses nothing. Braces are what PowerShell prints.
+@pytest.mark.parametrize("typed", [GUID, GUID.upper(), f"{{{GUID}}}", f"<guid={GUID}>",
+                                   f"  {GUID_BASE}  "])
+def test_a_guid_base_is_normalized_to_the_extended_form(typed: str) -> None:
+    assert is_guid_base(typed)
+    assert search_query(typed).base == GUID_BASE
+
+
+# A base that is not a GUID keeps the text it arrived with, minus the spaces.
+#
+# A half-copied `{...` is a truncated paste, not a GUID: repairing it into one
+# would invent a value. A DN loses its surrounding spaces exactly as a pasted
+# GUID does, so what reaches the wire does not depend on which spelling it was.
+@pytest.mark.parametrize("typed", [BASE, f"{{{GUID}", f"{GUID}}}"])
+def test_a_base_that_is_not_a_guid_is_left_alone(typed: str) -> None:
+    assert search_query(typed).base == typed
+    assert search_query(f"  {typed}  ").base == typed
+    assert not is_guid_base(typed)
+
+
+# A caller that wrote `<GUID=` has said what it means, so a typo is refused.
+#
+# Refused here rather than answered by a `Search failed` fault that travelled
+# to a domain controller first, which names neither the value nor the reason.
+# `is_guid_base` says False on the same values: a consumer that took the GUID
+# branch on this answer would otherwise eat the exception it was just promised.
+@pytest.mark.parametrize("typed", ["<GUID=>", "<GUID=not-a-guid>", f"<GUID={GUID[:-1]}>"])
+def test_a_malformed_guid_base_is_refused_before_the_network(typed: str) -> None:
+    assert not is_guid_base(typed)
+    with pytest.raises(ADWSClientError) as raised:
+        search_query(typed)
+    assert raised.value.code == "InvalidArgument"
+    assert raised.value.target == typed
 
 
 # The elements this client reads are the elements the server writes.
