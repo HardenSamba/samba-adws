@@ -13,6 +13,22 @@ One handler = one file in [classes/handlers/](../classes/handlers/). It processe
 | `…/transfer/Delete` | [`transfer.py`](../classes/handlers/transfer.py) | `Remove-ADUser` |
 | `…/transfer/Create` | [`crud.py`](../classes/handlers/crud.py) — `CRUDHandler` | `New-ADUser`, `New-ADGroup` |
 
+> **Group membership writes go through `Put`, not through an action of their own.**
+> `IActiveDirectoryAccountManagement` declares six operations and none of them
+> adds or removes a member, so `Add-ADGroupMember` and `Remove-ADGroupMember`
+> both arrive as `…/transfer/Put` on the *group* DN, carrying
+> `<da:ModifyRequest><da:Change Operation="add">` (or `"delete"`) on the
+> `member` attribute. Routing is
+> [`transfer.py`](../classes/handlers/transfer.py) → `ModifyHandler._modify_attrs`
+> ([`modify.py`](../classes/handlers/modify.py)) → `LdapAttrBuilder._flag_for`
+> ([`ldap_attr_builder.py`](../classes/directory/ldap_attr_builder.py)), which
+> maps `add` → `FLAG_MOD_ADD` and `delete`/`remove` → `FLAG_MOD_DELETE`.
+> Covered by `tests/unit/test_group_membership_write_path.py` (parse and
+> routing, offline) and `tests/dc/test_member_write_flags.py` (LDB flags).
+> A `GroupHandler` registered under the key `Groups` used to sit beside this
+> path; it was unreachable by any real client and has been removed
+> (see [samba-adws#4](https://github.com/HardenSamba/samba-adws/issues/4)).
+
 ### WS-Enumeration (paginated search)
 
 | SOAP action | Handler | Description |
@@ -23,13 +39,82 @@ One handler = one file in [classes/handlers/](../classes/handlers/). It processe
 | `…/enumeration/Renew` | [`renew.py`](../classes/handlers/renew.py) — `RenewHandler` | Extends the context expiration |
 | `…/enumeration/GetStatus` | [`get_status.py`](../classes/handlers/get_status.py) — `GetStatusHandler` | Context status and expiration |
 
+#### The attribute projection depends on the search scope
+
+`EnumerateHandler` resolves a request into one search through
+[`enumerate_query.py`](../classes/enumeration/enumerate_query.py), and the
+attribute list it hands to LDB depends on that search's scope:
+
+- **Base**: the selection is expanded with every constructed attribute, exactly as
+  before. The WS-Transfer Get path ([`get.py`](../classes/handlers/get.py)) is a
+  base search too, so `Get-ADUser -Properties tokenGroups` is unaffected.
+- **OneLevel and Subtree**: nothing is auto-expanded, and the three attributes a
+  directory only serves on a base search are removed even when the client names
+  them — `tokenGroups`, `tokenGroupsGlobalAndUniversal`,
+  `tokenGroupsNoGCAcceptable`, listed as `BASE_ONLY_ATTRIBUTES` in
+  [`constructed_attrs.py`](../classes/serialization/constructed_attrs.py).
+
+Without this, an Enumerate selecting no attribute at all — what a console listing
+a container sends, and what `ADWSSearchClient` sends for an empty `--properties`
+— asked a subtree search for `tokenGroups`, and Samba failed the whole query
+rather than omitting the one attribute:
+
+```
+operational_search_post_process failed for attribute 'tokenGroups' -
+Cannot provide tokenGroups attribute, this is not a BASE search
+(1, 'Indexed and full searches both failed!')
+```
+
+The base-scope requirement itself is documented: "Retrieving Token Groups is an
+expensive operation on the domain controllers, requiring a BASE scope LDAP query
+to return the attribute values for a given security principal object" (AD Schema,
+Token-Groups). What no specification settles is what a server does when a wider
+search asks for it anyway: [MS-ADTS] section 3.1.1.4.5.19 defines the value and
+says nothing about the scope. **Deduction from observed behaviour** (`CLAUDE.md`
+section 2): a Windows DC answers with the objects and simply no such attribute,
+so a client naming one of the three on a OneLevel or Subtree search now receives
+the objects without it instead of a fault.
+
+Every projection also carries `objectClass`, added by `ConstructedAttrs.for_scope`
+when the selection omits it, because each Pull item reports its structural class
+from that attribute.
+
+The scope word decides the projection *before* anything maps it onto an ldb
+constant — only the exact word `Base` is a base search, on both sides. That is
+why `enumerate_query.py` sits outside `classes/handlers/`: importing that package
+pulls in the directory bindings, and the defect of issue #32 was the wiring, not
+the rule, so it has to be pinned by a test that runs anywhere.
+[`test_enumerate_query.py`](../tests/unit/test_enumerate_query.py) pins the
+wiring, [`test_constructed_attrs.py`](../tests/unit/test_constructed_attrs.py)
+the rule.
+
+#### An enumeration context a handler cannot use is answered with a fault
+
+`Pull` answers a request that carries no `wsen:EnumerationContext`, or one the
+registry no longer holds, with the same `Invalid or expired enumeration context`
+fault that `Renew` and `GetStatus` already return.
+
+`Release` faults only on the missing identifier. A context the registry does not
+hold — released already, or expired and dropped by `get_context` — is answered
+with an ordinary `ReleaseResponse`, because releasing it is what the client asked
+for and it is already done; `release_context`
+([`enumeration_registry.py`](../classes/enumeration/enumeration_registry.py))
+returns `False` there and the handler does not treat that as an error. `Pull`
+cannot be idempotent in the same way: it has nothing to return.
+
+These handlers used to raise instead: over the wire the dispatcher turned that
+into an equivalent fault, but a handler driven directly — as
+[`tests/dc/test_handlers.py`](../tests/dc/test_handlers.py) does — saw only the
+exception. [`05-tests.md`](05-tests.md) states the contract: a handler that needs
+a richer request than a bare envelope answers with a fault, and a fault has to
+relate to its request too.
+
 ### ADWS-specific actions
 
 | Action (URL suffix) | Handler | Associated cmdlet |
 |---|---|---|
 | `Search` | [`search.py`](../classes/handlers/search.py) | arbitrary IMDA searches |
 | `Schema` | [`schema.py`](../classes/handlers/schema.py) | class and attribute introspection |
-| `Groups` | [`groups.py`](../classes/handlers/groups.py) | bulk group operations |
 | `GetADGroupMember` | [`get_ad_group_member.py`](../classes/handlers/get_ad_group_member.py) | `Get-ADGroupMember` |
 | `GetADPrincipalGroupMembership` | [`get_ad_principal_group_membership.py`](../classes/handlers/get_ad_principal_group_membership.py) | `Get-ADPrincipalGroupMembership` |
 | `GetADPrincipalAuthorizationGroup` | [`get_ad_principal_authorization_group.py`](../classes/handlers/get_ad_principal_authorization_group.py) | `Get-ADPrincipalAuthorizationGroup` (recursive token groups) |
@@ -75,6 +160,13 @@ HANDLER_FACTORIES = (
 2. Failing that, takes the **last segment** of the URL (`http://…/Foo/Bar` → `Bar`) and looks it up in `HANDLER_FACTORIES`.
 
 This is what lets the ADWS-specific actions (Microsoft proprietary URLs) reach the right handler through a simple naming convention.
+
+> **The suffix rule has no allowlist in front of it.** `ADWSDispatcher._invoke`
+> hands `context.action` straight to `resolve()`, so *any* action URI whose last
+> segment matches a registration key reaches that handler, whatever host or path
+> precedes it. A registration key is therefore a public entry point for every
+> authenticated caller, not merely a label for the URL Microsoft happens to send.
+> Register a key only for a handler you are willing to have reached that way.
 
 ## Handler contract
 

@@ -10,7 +10,9 @@ Values are the real protocol action where one is defined, and otherwise a
 test-local `http://tests.invalid/<Key>` URI. That second form is not a claim
 about what a Windows client sends: it is chosen because the router resolves an
 unlisted action by its last path segment, so it reaches the handler under test
-without inventing a Microsoft URI. See HardenSamba/samba-adws#4.
+without inventing a Microsoft URI. A third such key, `Groups`, was removed
+with GroupHandler; membership writes ride WS-Transfer Put instead. See
+HardenSamba/samba-adws#4.
 """
 
 TRANSFER = "http://schemas.xmlsoap.org/ws/2004/09/transfer"
@@ -49,9 +51,8 @@ HANDLER_ACTIONS = {
     "MoveADOperationMasterRole":
         f"{CUSTOM}/TopologyManagement/MoveADOperationMasterRole",
     "ChangeOptionalFeature": f"{CUSTOM}/TopologyManagement/ChangeOptionalFeature",
-    # No protocol action reaches these three: they match no operation in
+    # No protocol action reaches these two: they match no operation in
     # [MS-ADCAP] and none in the WS-* tables. See samba-adws#4.
-    "Groups": f"{LOCAL}/Groups",
     "Schema": f"{LOCAL}/Schema",
     "Search": f"{LOCAL}/Search",
 }

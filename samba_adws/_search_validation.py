@@ -10,11 +10,17 @@ what `EnumerateHandler` maps onto `ldb.SCOPE_*`; anything else it does not
 recognise falls through to `Subtree`, which is the widest of the three. A
 caller who asked for one level and silently searched a whole domain is the one
 mistake worth refusing here rather than passing on.
+
+**The base may name its container by GUID.** See `_search_base`: a
+distinguished name, the LDAP extended form `<GUID=...>`, or a bare
+`objectGUID`, which is normalised into the extended form so that
+`SearchQuery.base` always holds what goes on the wire.
 """
 
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 
+from samba_adws._search_base import normalize_base
 from samba_adws._validation import normalize_properties
 from samba_adws.errors import ADWSClientError
 
@@ -50,12 +56,13 @@ def search_query(
     ldap_filter: str = "(objectClass=*)",
     properties: Sequence[str] = (),
 ) -> SearchQuery:
-    _require_text(base, "Search base must be a non-empty distinguished name")
+    _require_text(base, "Search base must be a non-empty distinguished name or objectGUID")
     _require_text(ldap_filter, "Search filter must be a non-empty LDAP filter")
     if scope not in SCOPES:
         known = ", ".join(SCOPES)
         raise ADWSClientError(f"Scope must be one of {known}", "InvalidArgument", base)
-    return SearchQuery(base, scope, ldap_filter, normalize_properties(properties))
+    wire_base = normalize_base(base)
+    return SearchQuery(wire_base, scope, ldap_filter, normalize_properties(properties))
 
 
 # Validates one batch size, refusing the values that mean nothing.

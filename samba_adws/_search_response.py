@@ -12,18 +12,22 @@ the whole page over it would be the client deciding that a legal answer is a
 fault.
 
 The structural class of each object is the last value of `objectClass`, which
-the server guarantees is present: `EnumerateHandler` adds it to any projection
-that omits it, precisely so a caller never has to read it off the element name.
+the server guarantees is present: `ConstructedAttrs.for_scope` adds it to any
+projection that omits it, precisely so a caller never has to read it off the
+element name. That same projection drops `tokenGroups` and its two siblings
+outside a base-scoped search, so an object may legitimately come back without
+an attribute this client asked for.
 """
 
 import xml.etree.ElementTree as ET
 from typing import Mapping, Optional, Tuple
 
+from src.soap.namespaces import WSEN
+
 from samba_adws._envelope import check_action, parse_root, read_body
 from samba_adws._search_request import ENUMERATE_RESPONSE_ACTION, PULL_RESPONSE_ACTION
 from samba_adws._values import decode_object
 from samba_adws.errors import ADWSClientError
-from src.soap.namespaces import WSEN
 
 Page = Tuple[Tuple[Mapping[str, object], ...], Optional[str]]
 
