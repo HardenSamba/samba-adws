@@ -15,10 +15,14 @@ and a console never knows a distinguished name until something published one.
 See `cli_naming` for why it is a verb of its own rather than a field of
 `status`. samba-adws#28.
 
-**Read only, for now.** `search` is the verb `hardensamba-webui#9` and
-`samba-adws#20` were blocked on; the write verbs exist on `ADWSWriteClient` and
-are not exposed here yet, because a command that can delete an account needs a
-decision about which identity it acts as that `samba-adws#8` has not made.
+**Read only, for now**, and the reason is checked rather than assumed.
+`search` is the verb `hardensamba-webui#9` and `samba-adws#20` were blocked on.
+The write verbs exist on `ADWSWriteClient` as of `samba-adws#16` and are
+deliberately not exposed here, because the server still builds its request-time
+session with `system_session()` — see the call in `classes/server/connection.py`
+— so it acts as SYSTEM whoever asked. A `delete` verb on this command would
+therefore let any ticket-holder who can reach port 9389 empty the directory.
+That is `samba-adws#8`, and exposing a write verb is what it gates.
 
 **`status` exists so that a consumer can ask whether this command answers.**
 It opens nothing. `hardensamba-webui` probed with `search --help`, chosen
@@ -29,7 +33,7 @@ perfectly therefore read as installed and not answering. samba-adws#25.
 """
 
 import argparse
-from typing import List, Optional
+from typing import Callable, Dict, List, Optional
 
 from samba_adws import cli_format, cli_naming, cli_output, cli_search, cli_status
 from samba_adws.client import ADWSClient
@@ -37,7 +41,6 @@ from samba_adws.errors import ADWSClientError
 from samba_adws.search_client import ADWSSearchClient
 
 DEFAULT_PORT = 9389
-
 
 
 # Declares the arguments `search` takes.
@@ -91,12 +94,18 @@ def search(options: argparse.Namespace) -> int:
 
 
 # The entry point the package installs.
+#
+# The two verbs that open a connection are dispatched through a table rather
+# than a third `if`, which is also what keeps this function inside the three
+# return statements `.flake8` allows. `status` is not in it because it opens
+# nothing and so takes no client.
 def main(argv: Optional[List[str]] = None) -> int:
     options = parser().parse_args(argv)
-    if options.verb == "naming-context":
-        return naming_context(options)
-    if options.verb == "search":
-        return search(options)
+    connected: Dict[str, Callable[[argparse.Namespace], int]] = {
+        "naming-context": naming_context, "search": search,
+    }
+    if options.verb in connected:
+        return connected[options.verb](options)
     if options.verb == "status":
         return cli_output.emit(cli_status.report(DEFAULT_PORT), cli_format.wanted(options))
     return cli_output.refuse(f"unknown verb: {options.verb}")

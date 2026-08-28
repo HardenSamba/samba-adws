@@ -10,11 +10,13 @@ from samba_adws._search_validation import SCOPES, SearchQuery, search_query
 from samba_adws.client import ADWSClient
 from samba_adws.errors import ADWSClientError
 from samba_adws.search_client import ADWSSearchClient
+from samba_adws.write_client import ADWSWriteClient
 
 __all__ = (
     "ADWSClient",
     "ADWSClientError",
     "ADWSSearchClient",
+    "ADWSWriteClient",
     "SCOPES",
     "SearchQuery",
     "is_guid_base",

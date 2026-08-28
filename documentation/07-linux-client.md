@@ -20,10 +20,24 @@ Authentication and authorization are separate. The current server authenticates
 the Kerberos principal but still opens its request-time `SamDB` with a SYSTEM
 session. [Issue #8](https://github.com/HardenSamba/samba-adws/issues/8) tracks
 binding the accepted GSSAPI identity to Samba's ACL evaluation. Until it is
-fixed and proven live, this source client is a read-only integration preview:
-an unprivileged-user test proves authentication, not enforcement of that user's
-directory rights. Do not expose the service to untrusted domain principals or
-build write clients on this boundary.
+fixed and proven live, this source client is an integration preview: an
+unprivileged-user test proves authentication, not enforcement of that user's
+directory rights. **Do not expose the service to untrusted domain principals.**
+Treat every caller that can reach port 9389 as able to do whatever the SYSTEM
+session can do — which now includes the verbs under [Write
+operations](#write-operations).
+
+Two further facts belong here, because each is easy to assume the other way
+round. First, once #8 binds the caller's identity, opening a `SamDB` with that
+session info **does** enforce write ACLs: Samba's `acl` module runs on a direct
+local open, so a create or a delete the caller has no rights for is refused by
+the directory itself. Second, and unlike the write path, that same open does
+**not** apply read-side attribute filtering — `acl_read` lives in Samba's LDAP
+front end, not in a direct local file open. Read requests are therefore not
+attribute-filtered, and a successful read does not prove the caller's read
+rights. That gap is
+[issue #17](https://github.com/HardenSamba/samba-adws/issues/17), and closing
+#8 does not close it.
 
 Until Debian packaging is delivered by issue #6, run the client from a source
 checkout. The workstation dependency still comes only from Debian:
@@ -108,7 +122,7 @@ applies to connection, authentication, reads, and writes.
 | SOAP fault decoding | Supported |
 | WS-Enumeration `Enumerate` and `Pull` | Supported |
 | WS-Enumeration `Release` | Server-only |
-| Create, Put, Delete, password and group actions | Server-only |
+| Create, Put, Delete, rename, SetPassword (`ADWSWriteClient`) | Supported |
 | Schema and custom actions | Server-only |
 
 The client currently accepts the static WCF dictionary emitted by this server.
@@ -286,6 +300,149 @@ imports `ldb` and cannot be loaded on a machine without Samba. One test reads
 that file and checks the elements this client looks for are the elements it
 writes. It is coarse, and it catches the rename that would otherwise be found by
 an administrator looking at an empty screen.
+
+## Write operations
+
+`ADWSWriteClient` extends `ADWSClient` — it inherits `get_by_dn` and
+`naming_context` and the same connection settings, and adds the five verbs that
+change the directory. It is a sibling of `ADWSSearchClient`, not a subclass of
+it, so it does not have `search`. The handlers behind these verbs have existed
+since long before this client did; what was missing was a way for a Linux caller
+to reach them without reimplementing the wire protocol. That is `#16`.
+
+```python
+from samba_adws import ADWSWriteClient, ADWSClientError
+
+client = ADWSWriteClient("dc1.samdom.example.com")
+guid = client.create("CN=demo", "CN=Users,DC=samdom,DC=example,DC=com",
+                     {"objectClass": ["user"], "sAMAccountName": ["demo"]})
+```
+
+The stable signatures are:
+
+```python
+create(rdn: str, parent: str, attributes: Mapping[str, Sequence[str]]) -> str
+modify(identity: str, changes: Mapping[str, Sequence[str]]) -> None
+rename(identity: str, *, new_rdn: str = "", new_parent: str = "") -> None
+delete(identity: str) -> None
+set_password(identity: str, password: str) -> None
+```
+
+**No distinguished name is ever composed or parsed on this side.** `create`
+takes the relative name and the parent separately and sends them as the two
+fields the server composes a name from; `rename` takes a new relative name and a
+new parent the same way. Assembling a name here would be this client deciding
+how a directory spells one — RFC 4514 escaping, quoted and multi-valued RDNs
+included — and the server already owns that answer. A user named `Doe, Jane` is
+the case that punishes the alternative.
+
+`create` returns the `objectGUID` the directory reported, so a caller does not
+have to issue a second read to learn the identifier it was just handed. Note
+that the server answers the all-zero UUID
+`00000000-0000-0000-0000-000000000000` when it created the object but could not
+read the attribute back; that value means *created but not read back*, not
+*failed*. A `CreateResponse` that names no object at all is refused as a
+`ProtocolError` rather than returned as a success with an empty identifier.
+
+`modify` takes a mapping because three attribute edits are **one** LDAP modify
+in one transaction, where three calls would be three transactions that can
+half-apply. An empty value sequence clears an attribute on `modify`, and is
+refused on `create`, where an attribute named with nothing to put in it is a
+mistake rather than an instruction.
+
+`rename` sends only the half that changed: give `new_rdn` to rename in place,
+`new_parent` to move, or both. The server keeps the object's current value for
+whichever key is absent, so one signature covers rename, move, and both. They
+are keyword-only because a bare second string is not self-evidently a name
+rather than a container, and passing one for the other would silently move an
+object instead of renaming it. Passing neither is refused, and so is a half that
+is present but blank: absence is what tells the server to keep the value it has,
+so `new_rdn="   "` is not an absence — it is an instruction to call the object
+three spaces, and it is refused here rather than by the directory.
+
+### Creating a usable account is three exchanges, in an order that matters
+
+```python
+guid = client.create("CN=demo", parent, {
+    "objectClass": ["user"], "sAMAccountName": ["demo"],
+    "userAccountControl": ["546"],          # NORMAL_ACCOUNT | ACCOUNTDISABLE
+})
+dn = f"CN=demo,{parent}"     # the caller's own two halves, put back together
+client.set_password(dn, secret)
+client.modify(dn, {"userAccountControl": ["512"]})   # NORMAL_ACCOUNT, enabled
+```
+
+That `dn` is composed here, a few lines after this document said no name is
+composed on this side, so it is worth saying which claim holds. The claim is
+about the **client**: nothing in `samba_adws` builds a name out of parts or takes
+one apart, which is the work that would need an RFC 4514 parser. A caller putting
+back together the two strings it has just passed to `create` is not parsing
+anything. It does have to do that, because the other four verbs address an object
+by distinguished name — `ModifyHandler` and `DeleteHandler` hand `identity`
+straight to `ldb.Dn` — so the `objectGUID` that `create` returns is not accepted
+where they expect a DN. The GUID is still worth returning: it is the identifier
+that survives the rename described above, where the DN does not. It is something
+to record, not something to pass back in here.
+
+Create the account **disabled**, set the password, and only then clear the
+disabled bit. A directory refuses to enable an account that has no password, so
+the order is forced in one direction; the reason it is worth writing down is the
+other direction. A failure at any step then leaves a *disabled* object, which is
+inert. Enabling first and setting the password second leaves, on a failure at
+step two, an enabled account with no password — which is the kind of half-made
+thing nobody finds until it is used.
+
+The orchestration of those three calls is deliberately **not** in this package:
+it is policy above the protocol boundary, it needs a caller-supplied relative
+name, and it belongs to its own ticket. The ordering is written here so the
+knowledge survives that separation.
+
+### An empty response body is a success
+
+A WS-Transfer `PutResponse` and `DeleteResponse` each carry an **empty** SOAP
+body, and each is an acknowledgement that the work was done — `ModifyHandler`
+and `DeleteHandler` both answer with an empty body on success. A client that
+required a non-empty body, as the read path rightly does, would report failure
+for a rename or a delete the directory had already performed. `_write_response`
+exists to hold that distinction, which is why the write path does not go through
+`_envelope.read_body`.
+
+Each response is also checked against the reply action its verb expects, so an
+acknowledgement of some other operation cannot satisfy a delete.
+
+### What a refusal is called
+
+`ADWSClientError.code` is the fault's SOAP subcode where there is one. On the
+write path there usually is not: `FaultBuilder.directory_error` — which is what
+`CreateHandler`, `ModifyHandler` and `DeleteHandler` all answer a failure with —
+sets no subcode and puts its discriminator in the fault Detail instead, as
+`da:ShortError`. That is read as the code, so a refused create arrives as
+`CreateFailed`, a refused modify or rename as `ModifyFailed`, a delete as
+`DeleteFailed`, and a request the handler could not even read as
+`InvalidRequest`. Without it all four collapse to `SOAPFault` and the caller is
+left parsing the reason text.
+
+`set_password` is the exception that proves the rule: it faults through
+`custom_action_fault`, which *does* set a subcode, and arrives as
+`SetPasswordFault`. A subcode always wins over the Detail. A reason mentioning
+"not found" is normalised to `ObjectNotFound` whichever of the two carried it,
+and `.target` is the object the call named — including when the refusal happened
+before the wire, as it does for an empty identity.
+
+### Endpoints and what this server actually reads
+
+`Create` is addressed to `Windows/ResourceFactory` and `SetPassword` to
+`Windows/AccountManagement`; the rest go to `Windows/Resource`. That is what the
+published WCF endpoint table gives for those contracts and what a Microsoft
+server requires. This server routes on `<a:Action>` alone and never reads
+`<a:To>`, so the distinction costs nothing here — with one exception:
+`ResourceFactory` is the address this server *does* read, because `CreateHandler`
+rewrites it into the `ResourceCreated` EPR it replies with.
+
+Offline tests cover the request direction against the server's own parsers, and
+the response direction over a scripted transport. `tests/dc/test_write_verbs.py`
+drives all five verbs through the real handlers against a provisioned directory
+and is skipped without one.
 
 ## The `samba-adws` command
 
