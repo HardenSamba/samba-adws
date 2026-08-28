@@ -15,14 +15,16 @@ and a console never knows a distinguished name until something published one.
 See `cli_naming` for why it is a verb of its own rather than a field of
 `status`. samba-adws#28.
 
-**Read only, for now**, and the reason is checked rather than assumed.
-`search` is the verb `hardensamba-webui#9` and `samba-adws#20` were blocked on.
-The write verbs exist on `ADWSWriteClient` as of `samba-adws#16` and are
-deliberately not exposed here, because the server still builds its request-time
-session with `system_session()` — see the call in `classes/server/connection.py`
-— so it acts as SYSTEM whoever asked. A `delete` verb on this command would
-therefore let any ticket-holder who can reach port 9389 empty the directory.
-That is `samba-adws#8`, and exposing a write verb is what it gates.
+**Read only, for now.** `search` is the verb `hardensamba-webui#9` and
+`samba-adws#20` were blocked on. The write verbs exist on `ADWSWriteClient` as
+of `samba-adws#16` and are deliberately not exposed here. The reason is no
+longer the one this paragraph used to give: `samba-adws#8` has landed, so a
+request runs as the principal that authenticated it and Samba refuses a write
+that principal has no right to. What is left is a design question rather than a
+privilege one — a destructive verb reached from a shell needs a confirmation
+story of its own, and the consumers asking for this command
+(`hardensamba-webui`) drive writes through the Python client, where a refusal
+carries the object it names.
 
 **`status` exists so that a consumer can ask whether this command answers.**
 It opens nothing. `hardensamba-webui` probed with `search --help`, chosen
