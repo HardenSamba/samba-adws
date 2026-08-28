@@ -74,7 +74,14 @@ def envelope() -> Any:
 
 @pytest.fixture
 def registry(logger: logging.Logger) -> Iterator[Any]:
-    """A handler registry built per test, never at module level (CLAUDE.md 5)."""
+    """A handler registry built per test, never at module level (CLAUDE.md 5).
+
+    Deliberately SYSTEM, and asked for by name. These tests drive handlers
+    below the network, where there is no negotiation to take an identity from,
+    so they prove the wiring and never the authorization. What proves the
+    authorization is `tests/dc/test_session_security.py`, which asks a real
+    directory.
+    """
+    from classes.directory.maintenance import local_session
     from classes.handlers.handler_registry import HandlerRegistry
-    from samba.auth import system_session
-    yield HandlerRegistry(logger, system_session())
+    yield HandlerRegistry(logger, local_session())
