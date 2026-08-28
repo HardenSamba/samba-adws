@@ -38,7 +38,8 @@ DEFAULT_PORT = 9389
 def add_search(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--server", required=True, help="the controller to ask")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--base", required=True, help="the container to read")
+    parser.add_argument("--base", required=True,
+                        help="the container to read: a DN, <GUID=...>, or a bare objectGUID")
     parser.add_argument("--scope", default="OneLevel", choices=("Base", "OneLevel", "Subtree"))
     parser.add_argument("--filter", dest="ldap_filter", default="(objectClass=*)")
     parser.add_argument("--properties", default="", help="comma-separated, all when empty")

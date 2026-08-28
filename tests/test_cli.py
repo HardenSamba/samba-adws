@@ -23,6 +23,7 @@ from src.soap.namespaces import AD, ADDATA, SOAP_ENV, WSA, WSEN, XSD, XSI
 from tests.scripted_transport import ScriptedTransport
 
 BASE = "OU=Staff,DC=example,DC=test"
+GUID = "6c8dd5f1-6b3c-4f1a-9d33-6b1f0a2e77aa"
 NAMESPACES = (
     f'xmlns:s="{SOAP_ENV}" xmlns:a="{WSA}" xmlns:wsen="{WSEN}" xmlns:ad="{AD}" '
     f'xmlns:addata="{ADDATA}" xmlns:xsi="{XSI}" xmlns:xsd="{XSD}"'
@@ -140,6 +141,42 @@ def test_an_unknown_scope_never_reaches_the_network(
     with pytest.raises(SystemExit):
         main(argv)
 
+    assert transport.requests == []
+
+
+# A GUID base travels as the extended DN form, read back by the server's parser.
+#
+# The console holds GUIDs because a distinguished name moves when somebody
+# renames a container. This proves the command line carries one, not just the
+# library: it decodes the bytes the transport actually received.
+@pytest.mark.parametrize("typed", [GUID, f"<GUID={GUID}>"])
+def test_a_guid_base_travels_as_the_extended_dn_form(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any, typed: str
+) -> None:
+    import xml.etree.ElementTree as ET
+
+    from classes.parsing.context_enumeration import read_enumerate
+
+    transport = install(monkeypatch, one_page)
+    argv = ["search", "--server", "dc.example.test", "--base", typed]
+    status, _, _ = run(monkeypatch, capsys, argv)
+
+    assert status == 0
+    opened = ET.fromstring(decode_xml(transport.requests[0]))
+    assert read_enumerate(opened)["base_dn"] == f"<GUID={GUID}>"
+
+
+# A base that opens with `<GUID=` and carries no GUID never reaches the network.
+def test_a_malformed_guid_base_never_reaches_the_network(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    transport = install(monkeypatch, one_page)
+    argv = ["search", "--server", "dc.example.test", "--base", "<GUID=not-a-guid>"]
+    status, out, err = run(monkeypatch, capsys, argv)
+
+    assert status == 1
+    assert out == ""
+    assert "InvalidArgument" in err
     assert transport.requests == []
 
 
