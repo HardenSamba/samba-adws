@@ -19,9 +19,17 @@ def validate_connection(server: str, port: int, timeout: float) -> None:
 
 
 # Validates the distinguished name used as the object identity.
+#
+# The rejected value is carried as the error's target, the way `server` is
+# above, so a caller reading `.target` sees what it passed rather than None.
+# `ADWSClient.get_by_dn` backfills a target for everything raised inside its
+# exchange, but this check runs before that block, and the write verbs have no
+# such wrapper at all — without this they are the one failure that names nothing.
 def validate_identity(identity: str) -> None:
     if not isinstance(identity, str) or not identity.strip():
-        raise ADWSClientError("Identity must be a non-empty distinguished name", "InvalidArgument")
+        target = identity if isinstance(identity, str) else None
+        raise ADWSClientError("Identity must be a non-empty distinguished name",
+                              "InvalidArgument", target)
 
 
 # Returns an immutable, validated property sequence.

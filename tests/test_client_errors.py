@@ -5,8 +5,8 @@ import subprocess
 import sys
 
 import pytest
-
 from samba_adws import ADWSClient, ADWSClientError
+
 from tests.client_helpers import (
     failing_response,
     install_transport,
@@ -69,6 +69,16 @@ def test_client_rejects_invalid_arguments() -> None:
 
 
 # Verifies importing the public client never loads Samba server modules.
+#
+# `samba_adws.write_client` is named as well as `client`: the write surface is
+# the newest and the easiest one to reach for a server-side helper from.
+#
+# The two `classes.parsing` modules are here for a different reason. They are
+# server code, and `tests/test_write_request.py` asserts what the client sends
+# by handing its bytes to them — which it can only do on a workstation while
+# they stay free of `ldb`. Nothing else pins that: the day an `ldb` import
+# reaches `context.py`, the whole write-request suite stops collecting off a DC
+# without failing, and this is the assertion that fails instead.
 def test_client_import_is_workstation_safe() -> None:
     statement = (
         "import sys,types; from types import SimpleNamespace; "
@@ -77,6 +87,8 @@ def test_client_import_is_workstation_safe() -> None:
         "mutual_authentication=1,confidentiality=2,integrity=4,"
         "replay_detection=8,out_of_sequence_detection=16); "
         "sys.modules['gssapi']=fake; import samba_adws.client; import samba_adws._nettcp; "
+        "import samba_adws.write_client; "
+        "import classes.parsing.body_parser; import classes.parsing.context; "
         "bad=[n for n in sys.modules if n in ('samba','ldb') or n.startswith('classes.server')]; "
         "assert not bad, bad"
     )
