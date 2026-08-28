@@ -124,10 +124,11 @@ a validation error, with the target distinguished name attached.
 | Resource endpoint, WS-Transfer Get by DN | Supported |
 | Optional IMDA attribute projection | Supported |
 | SOAP fault decoding | Supported |
-| WS-Enumeration (`Enumerate`, `Pull`, `Release`) | Server-only |
+| WS-Enumeration `Enumerate` and `Pull` | Supported |
+| WS-Enumeration `Release` | Server-only |
 | Create, Put, Delete, rename, SetPassword (`ADWSWriteClient`) | Supported |
 | Group-membership and other custom actions | Server-only |
-| Schema and enumeration-based search | Server-only |
+| Schema and custom actions | Server-only |
 
 The client currently accepts the static WCF dictionary emitted by this server.
 It rejects a non-empty dynamic dictionary; the server does not negotiate or
@@ -139,3 +140,133 @@ import isolation:
 ```bash
 python3 -m pytest -q tests
 ```
+
+## Searching
+
+`ADWSClient.get_by_dn` fetches one object whose distinguished name the caller
+already knows. That is the wrong half for anything that draws a list: a console
+never knows a distinguished name until it has listed something. `ADWSSearchClient`
+extends it with the two WS-Enumeration messages the server has answered since
+enumeration landed.
+
+```python
+from samba_adws import ADWSSearchClient, search_query
+
+client = ADWSSearchClient("dc.example.test")
+query = search_query(
+    base="OU=Staff,OU=Paris,DC=example,DC=test",
+    scope="OneLevel",
+    ldap_filter="(objectClass=user)",
+    properties=("sAMAccountName", "displayName", "whenChanged"),
+)
+
+for entry in client.search(query):
+    print(entry["sAMAccountName"])
+```
+
+`search` is a generator: a container holding forty thousand accounts is the case
+paging exists for, and gathering them all would undo it. A caller that wants one
+screenful holds the cursor itself:
+
+```python
+context = client.open_search(query)
+objects, context = client.pull(context, count=50)
+# `context` is None when the server said the sequence ended.
+```
+
+**The cursor is opaque.** This client never parses one and never builds one. It
+is the server's own position in a cached result set, which is what makes paging
+a directory somebody else is writing to safe — an offset would skip a row every
+time another administrator deletes one.
+
+**The end of a sequence is `EndOfSequence`, never an empty batch.** A short page
+is ordinary and an empty page in the middle is legal, so a client that inferred
+the end from either would truncate a listing without saying so. A response
+carrying neither `EndOfSequence` nor a context is refused rather than guessed
+at: the two possible guesses fail in opposite directions and neither is
+detectable afterwards.
+
+### The scope is checked here, not widened there
+
+`Base`, `OneLevel` and `Subtree` are what `EnumerateHandler` maps onto
+`ldb.SCOPE_*`. Anything it does not recognise falls through to `Subtree`, the
+widest of the three, so a caller who mistyped one level would silently search a
+whole domain and get an answer that does not look wrong. `search_query` refuses
+a scope outside the three before a socket is opened.
+
+### The endpoint is `Windows/Enumeration`
+
+The published WCF endpoint table gives that path for the `IEnumeration`
+contract. This server does no demultiplexing by endpoint — it routes on the SOAP
+action and answers whatever URI it is addressed with — so the distinction costs
+nothing here and is the difference between working and not working against a
+Microsoft server.
+
+### What the tests can and cannot check offline
+
+The **request** direction is checked against the server's own parser:
+`classes/parsing/context_enumeration` imports nothing but ElementTree, so
+`tests/test_client_search.py` feeds it the bytes the client actually builds and
+asserts on what the server would have understood. A test that read the request
+back with a parser written for the test would agree with itself.
+
+The **response** direction is scripted, because `classes/handlers/pull.py`
+imports `ldb` and cannot be loaded on a machine without Samba. One test reads
+that file and checks the elements this client looks for are the elements it
+writes. It is coarse, and it catches the rename that would otherwise be found by
+an administrator looking at an empty screen.
+
+## The `samba-adws` command
+
+`MODULE.yaml` has declared a command of that name since it was written, and
+there was none. There is now, and it exists so that another module can reach
+this one **without importing it**.
+
+That is the ecosystem's rule rather than a preference: a module owns its
+behaviour and its consumers render it, and a consumer that imported this
+package would be holding this module's code in its own process — with
+`python3-samba` underneath, which is not thread-safe and is why the server
+forks rather than threads.
+
+```bash
+samba-adws search --server dc.example.test     --base "OU=Staff,DC=example,DC=test"     --scope OneLevel     --filter "(objectClass=user)"     --properties sAMAccountName,displayName,whenChanged     --count 50
+```
+
+```json
+{"objects":[{"sAMAccountName":"m.dupont","displayName":"Marie Dupont"}],"cursor":"ctx-2"}
+```
+
+**One page per invocation.** A command that ran a subtree search to completion
+would hold a controller for as long as the domain is large and hand its caller
+forty thousand objects at once. The caller pages by asking again with the
+cursor it was given:
+
+```bash
+samba-adws search --server dc.example.test --base "..." --cursor ctx-2
+```
+
+An empty `cursor` is the end of the sequence. An empty `objects` is **not**: a
+server may answer a short page, or an empty one, before its last.
+
+**The attributes are the directory's own.** They arrive as the server named them
+and leave unchanged. A consumer wanting different names would be asking this
+command to hold its vocabulary, and there is more than one consumer.
+
+### What a consumer can rely on
+
+| | |
+|---|---|
+| Success | exit `0`, one JSON document on stdout, stderr empty |
+| Failure | non-zero exit, the reason on stderr, **stdout empty** |
+| Bad arguments | exit `2` from the parser, before anything is opened |
+
+stdout is left empty on failure deliberately. A consumer that parsed it on a
+non-zero status would be reading a shape this command does not promise, and one
+that did not would find half a page.
+
+### Read only, for now
+
+`search` is the verb `hardensamba-webui#9` and `#20` were blocked on. The write
+verbs exist on `ADWSWriteClient` and are not exposed here yet: a command that
+can delete an account needs a decision about which identity it acts as, and
+that is `#8`.

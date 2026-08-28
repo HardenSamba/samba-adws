@@ -11,12 +11,23 @@ from src.soap.namespaces import AD, XSI
 
 # Converts every AD attribute in a SOAP body into a mapping entry.
 def decode_body(body: ET.Element) -> Dict[str, object]:
-    result: Dict[str, object] = {}
-    for element in _attribute_elements(body):
-        name, value = _decode_attribute(element)
-        result[name] = value
+    result = decode_object(body)
     if not result:
         raise ADWSClientError("Get response contains no attributes", "MalformedResponse")
+    return result
+
+
+# Converts one element's AD attributes into a mapping, empty if it has none.
+#
+# Separate from `decode_body` because a Pull answers with many objects and an
+# object with no attributes is a fact about that object rather than a malformed
+# response - a caller that projected attributes an object does not carry gets
+# an empty entry, not an exception that loses the whole page.
+def decode_object(element: ET.Element) -> Dict[str, object]:
+    result: Dict[str, object] = {}
+    for attribute in _attribute_elements(element):
+        name, value = _decode_attribute(attribute)
+        result[name] = value
     return result
 
 
