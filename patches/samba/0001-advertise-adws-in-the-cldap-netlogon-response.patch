@@ -1,0 +1,40 @@
+Description: advertise Active Directory Web Services in the CLDAP netlogon response
+ A Windows client looking for a domain controller that speaks ADWS calls
+ DsGetDcName with DS_WEB_SERVICE_REQUIRED. The locator keeps only the
+ controllers whose CLDAP netlogon response carries DS_SERVER_WEBSERV in
+ server_type. Samba never sets that bit, because Samba itself does not
+ implement ADWS, so a domain served by this module is invisible to the
+ Active Directory Administrative Center and to the ActiveDirectory
+ PowerShell module used without an explicit -Server.
+ .
+ The bit is off unless smb.conf carries "adws:advertise = yes".
+ Announcing the capability with nothing listening on 9389 is worse than
+ not announcing it: the client locates the controller, connects, and
+ fails, instead of looking elsewhere or reporting that no ADWS
+ controller exists.
+ .
+ lpcfg_parm_bool reads a generic parameter, so this needs no entry in the
+ parameter table, no documentation change, and no IDL regeneration.
+ DS_SERVER_WEBSERV already exists in librpc/idl/netlogon.idl, as does
+ NBT_SERVER_ADS_WEB_SERVICE in librpc/idl/nbt.idl; both are 0x00002000.
+Author: HardenSamba
+Bug: https://github.com/HardenSamba/samba-adcs/issues/20
+Forwarded: not-needed
+Last-Update: 2026-08-20
+--- a/source4/dsdb/samdb/ldb_modules/netlogon.c
++++ b/source4/dsdb/samdb/ldb_modules/netlogon.c
+@@ -294,6 +294,14 @@
+ 		}
+ 	}
+
++	/* HardenSamba: advertise Active Directory Web Services when a separate
++	 * ADWS daemon serves 9389. Off unless smb.conf carries
++	 * "adws:advertise = yes", because announcing the capability with nothing
++	 * listening makes a client connect and fail rather than look elsewhere. */
++	if (lpcfg_parm_bool(lp_ctx, NULL, "adws", "advertise", false)) {
++		server_type |= DS_SERVER_WEBSERV;
++	}
++
+ 	if (dc_level >= DS_DOMAIN_FUNCTION_2012) {
+ 		server_type |= DS_SERVER_DS_8;
+ 	}

@@ -1,0 +1,6 @@
+# A patch is applied by `patch` on a Debian host. Checked out with CRLF — the
+# default on Windows with core.autocrlf=true — every line of context ends in a
+# carriage return the source tree does not have, and the hunk fails to match.
+# Never convert one.
+*.patch -text
+*.diff -text
