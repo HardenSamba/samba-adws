@@ -6,7 +6,7 @@ Complete index of the project documentation.
 
 ### I just want to install it
 
-→ [02-installation.md](02-installation.md), then [05-tests.md § Test-ADWS-Sovereign.ps1](05-tests.md#1-test-adws-sovereignps1-validation-principale).
+→ [02-installation.md](02-installation.md), then [05-tests.md § Test-ADWS-Sovereign.ps1](05-tests.md#3-test-adws-sovereignps1-main-validation).
 
 ### I want to call ADWS from Linux
 
@@ -27,7 +27,7 @@ Kerberos requirements, and current action surface.
 
 ### I want to write a regression test
 
-→ [05-tests.md § pytest](05-tests.md#0-pytest-run-this-first) if it needs no directory, [05-tests.md § tests/dc](05-tests.md#2-testsdc-handlers-in-isolation) if it does.
+→ [05-tests.md § pytest](05-tests.md#0-pytest-run-this-first) if it needs no directory, [05-tests.md § tests/dc](05-tests.md#1-testsdc-handlers-in-isolation) if it does.
 
 ---
 
@@ -70,10 +70,11 @@ Kerberos requirements, and current action surface.
 - Best practices
 
 ### [05-tests.md](05-tests.md)
-- Overview of the three suites
-- `Test-ADWS-Sovereign.ps1` (end-to-end PowerShell validation)
+- Overview of the four levels
+- `pytest -m "not dc"` (level 0, runs anywhere, blocking pre-commit hook)
 - `pytest tests/dc` (handlers in isolation)
 - `test_adws.py` (environment diagnostics)
+- `Test-ADWS-Sovereign.ps1` (end-to-end PowerShell validation)
 - Recommended workflow
 
 ### [06-depannage.md](06-depannage.md)

@@ -1,10 +1,12 @@
 # Tests
 
-Four levels, in the order to run them.
+Four levels, ranked by how much each one needs to run. The sections below follow
+the same order; [Recommended workflow](#recommended-workflow) at the bottom gives
+the order to actually run them in, which is not quite the same thing.
 
 | Level | Suite | Where | What | When |
 |---|---|---|---|---|
-| 0 | `pytest tests/unit` | Anywhere | The layers that need no directory: WCF, NMF, SOAP envelope, value encoding, request parsing, handler coverage | Every commit |
+| 0 | `pytest -m "not dc"` | Anywhere | The layers that need no directory: WCF, NMF, SOAP envelope, value encoding, request parsing, handler coverage, the Linux client, and the `tools/test/` checks (upgrade negotiation, inbound size limits, dispatch faults) | Blocking pre-commit hook on every commit touching a Python file under `src/`, `classes/`, `samba_adws/`, `tests/` or `tools/test/` |
 | 1 | `pytest tests/dc` | Linux DC | Every registered handler, in isolation, against a real directory | Before deployment |
 | 2 | `tools/test/test_adws.py` | Linux DC | Operator diagnostic: port, imports, parser | First start, and when something is wrong |
 | 3 | `Test-ADWS-Sovereign.ps1` | Windows | End to end, real PowerShell cmdlets | Final validation |
@@ -12,23 +14,60 @@ Four levels, in the order to run them.
 ## 0. `pytest` (run this first)
 
 ```bash
-python3 -m pytest -q
+python3 -m pytest -q -m "not dc"
 ```
 
-Levels 0 and 1 are one pytest run. Level 1 carries the `dc` marker and
-`tests/conftest.py` **skips** it when `python3-samba` cannot be imported, so the
-command above passes on a plain Debian box with no directory:
-
-```console
-$ python3 -m pytest -q
-ssssssssssssssssssssssssssssssss........................................
-48 passed, 32 skipped
-```
-
-Skipped, never failed. A red run on a workstation is a real defect, not a
+Levels 0 and 1 are one pytest run, split by a marker. Level 1 carries the `dc`
+marker, and `tests/conftest.py` **skips** it when `python3-samba` cannot be
+imported, so even a bare `python3 -m pytest -q` passes on a plain Debian box
+with no directory: the level 1 cases report as `s`, everything else as `.`.
+Skipped, never failed — a red run on a workstation is a real defect, not a
 missing DC.
 
-`python3 -m pytest tests/unit -q` runs only the part that needs nothing.
+On a DC that skip does not apply — `samba` imports, so the same bare command
+runs levels 0 and 1 together. That is what you want before deploying, and not
+what you want on every commit. `-m "not dc"` deselects level 1 on *any*
+machine, which is why it is the form written above: it means the same thing on
+a workstation and on a DC.
+
+`python3 -m pytest tests/unit -q` narrows further, to the layer tests alone.
+
+No pass count is quoted anywhere in this file, deliberately: it moves with every
+merge, and a hard-coded one is stale the day after it is written. Run the
+command to get the current one.
+
+### Level 0 is a blocking pre-commit hook
+
+`.pre-commit-config.yaml` runs
+
+```bash
+python3 -m pytest -q -m "not dc" --ignore=tests/dc
+```
+
+as a blocking hook on every commit touching a **Python file** under `src/`,
+`classes/`, `samba_adws/`, `tests/` or `tools/test/`. The suite costs well under
+a second on a workstation, and that measurement is the whole justification: a
+gate that cheap is worth paying every time, and level 1 is deselected rather
+than failed, so no DC is needed to commit.
+
+The marker and the path exclusion say the same thing twice on purpose.
+Deselecting the marker is the form a human types; `--ignore=tests/dc` makes the
+promise structural, because the marker comes from a single `pytestmark` line in
+`tests/dc/test_handlers.py` and a new file added there without it would
+otherwise be run by a blocking hook on the DC.
+
+The scoping is by file, so a commit that touches only `pyproject.toml` — which
+holds the `testpaths` and the `dc` marker registration this hook depends on — is
+not gated by it. Run the command by hand when you change that file.
+
+The hook is `language: system`, so `pre-commit` does not install pytest into an
+isolated environment of its own — pytest is listed in
+`tools/installation/requirements-dev.txt` with the rest of the tooling, and
+`pip3 install -r tools/installation/requirements-dev.txt` is part of the
+documented setup. `language: system` also means the entry runs exactly as
+written, which is why it says `python3`: Debian ships no `/usr/bin/python`
+unless `python-is-python3` is installed, and a hook that cannot start is not a
+gate.
 
 ### What level 0 covers, and the one string it uses
 
@@ -65,7 +104,54 @@ opening `SamDB` at import time. That applies to fixtures too.
 
 ---
 
-## 1. `Test-ADWS-Sovereign.ps1` (main validation)
+## 1. `tests/dc/` (handlers in isolation)
+
+To be run on **the Samba DC**:
+
+```bash
+cd /root/SambaAD_ADWS
+python3 -m pytest tests/dc -q
+```
+
+Loads the Python handlers directly and passes them hand-built `RequestContext` objects (no NMF, no WCF, no network). Useful to:
+
+- isolate an application bug from a protocol bug,
+- add a regression case without having to deploy everything,
+- iterate quickly while writing a new handler.
+
+Every registered handler is driven here, and each one is asserted to answer
+with XML that parses and whose `<a:RelatesTo>` echoes the request's
+`MessageID` — the invariant of `CLAUDE.md` section 5, and the assertion that
+holds for all twenty-nine without guessing at the shape of each body. A handler
+that needs a richer request than a bare envelope answers with a fault, and a
+fault has to relate to its request too.
+
+This replaces `tools/test/test_handlers.py`, whose three checks moved here. That
+script took a `reg` argument that pytest read as a fixture, so its three checks
+had never run under `pytest`, only through its own `main()`.
+
+---
+
+## 2. `test_adws.py` (diagnostics)
+
+```bash
+python3 tools/test/test_adws.py
+```
+
+Checks, in sequence:
+
+1. That port `9389/tcp` is open.
+2. Critical imports (`samba`, `ldb`, `gssapi`, `lxml`).
+3. The `SamDB` connection (reading the default DN).
+4. The XML/WCF parser (encode/decode round trip).
+5. Instantiation of every handler.
+6. Routing through `HandlerRegistry`.
+
+This is the first thing to run after installation to confirm that the environment is healthy, well before trying a PowerShell cmdlet.
+
+---
+
+## 3. `Test-ADWS-Sovereign.ps1` (main validation)
 
 Pester-like suite in pure PowerShell. **This is the reference test**: if everything passes here, the server is usable in production.
 
@@ -135,58 +221,11 @@ $results | Where-Object Status -eq Fail | Select-Object Name, Error
 
 ---
 
-## 2. `tests/dc/` (handlers in isolation)
-
-To be run on **the Samba DC**:
-
-```bash
-cd /root/SambaAD_ADWS
-python3 -m pytest tests/dc -q
-```
-
-Loads the Python handlers directly and passes them hand-built `RequestContext` objects (no NMF, no WCF, no network). Useful to:
-
-- isolate an application bug from a protocol bug,
-- add a regression case without having to deploy everything,
-- iterate quickly while writing a new handler.
-
-Every registered handler is driven here, and each one is asserted to answer
-with XML that parses and whose `<a:RelatesTo>` echoes the request's
-`MessageID` — the invariant of `CLAUDE.md` section 5, and the assertion that
-holds for all twenty-nine without guessing at the shape of each body. A handler
-that needs a richer request than a bare envelope answers with a fault, and a
-fault has to relate to its request too.
-
-This replaces `tools/test/test_handlers.py`, whose three checks moved here. That
-script took a `reg` argument that pytest read as a fixture, so its three checks
-had never run under `pytest`, only through its own `main()`.
-
----
-
-## 3. `test_adws.py` (diagnostics)
-
-```bash
-python3 tools/test/test_adws.py
-```
-
-Checks, in sequence:
-
-1. That port `9389/tcp` is open.
-2. Critical imports (`samba`, `ldb`, `gssapi`, `lxml`).
-3. The `SamDB` connection (reading the default DN).
-4. The XML/WCF parser (encode/decode round trip).
-5. Instantiation of every handler.
-6. Routing through `HandlerRegistry`.
-
-This is the first thing to run after installation to confirm that the environment is healthy, well before trying a PowerShell cmdlet.
-
----
-
-## 4. Validation against a real Windows client
+## Validation status against a real Windows client
 
 Reference validation is done from a **domain-joined Windows workstation**,
 with the real `ActiveDirectory` module, by running
-`.\tools\test\Test-ADWS-Sovereign.ps1 -Server <DC>` (see §1).
+`.\tools\test\Test-ADWS-Sovereign.ps1 -Server <DC>` (see §3).
 
 ### Status: validated against a real Windows 11 client (8 June 2026)
 
@@ -239,35 +278,49 @@ by `Search-ADAccount`, tolerated by AD but rejected by ldb) are normalised to
                 └─────────────┬──────────────┘
                               ▼
                 ┌────────────────────────────┐
-                │ 2. test_adws.py            │  ← imports + sanity
+                │ 2. pytest -m "not dc"      │  ← level 0, no DC
+                │    anywhere                │     (pre-commit runs it)
+                └─────────────┬──────────────┘
+                              ▼
+                ┌────────────────────────────┐
+                │ 3. test_adws.py            │  ← imports + sanity
+                │    on DC                   │     (level 2)
+                └─────────────┬──────────────┘
+                              ▼
+                ┌────────────────────────────┐
+                │ 4. pytest tests/dc         │  ← isolated logic
+                │    on DC                   │     (level 1)
+                └─────────────┬──────────────┘
+                              ▼
+                ┌────────────────────────────┐
+                │ 5. python3 -m src.main     │  ← live server
                 │    on DC                   │
                 └─────────────┬──────────────┘
                               ▼
                 ┌────────────────────────────┐
-                │ 3. pytest tests/dc         │  ← isolated logic
-                │    on DC                   │
+                │ 6. Test-ADWS-Sovereign.ps1 │  ← real E2E
+                │    -SkipMutations          │     (level 3, reads first)
                 └─────────────┬──────────────┘
                               ▼
                 ┌────────────────────────────┐
-                │ 4. python3 -m src.main     │  ← live server
-                │    on DC                   │
-                └─────────────┬──────────────┘
-                              ▼
-                ┌────────────────────────────┐
-                │ 5. Test-ADWS-Sovereign.ps1 │  ← real E2E
-                │    -SkipMutations          │     (reads first)
-                └─────────────┬──────────────┘
-                              ▼
-                ┌────────────────────────────┐
-                │ 6. Test-ADWS-Sovereign.ps1 │  ← E2E + writes
+                │ 7. Test-ADWS-Sovereign.ps1 │  ← E2E + writes
                 │    (without -SkipMutations)│
                 └────────────────────────────┘
 ```
 
+Step 2 is not optional and not a suggestion: it is the blocking pre-commit hook,
+so a commit that fails level 0 does not exist.
+
+The workflow visits the levels as 0 → 2 → 1 → 3, not in numeric order, and that
+is on purpose: once you are on the DC, the level 2 diagnostic is the cheapest
+way to tell a broken environment from broken code, so it goes before the level 1
+handler tests. The numbers in the table above rank the suites by how much they
+need, not by when you run them.
+
 At each failing step, go back no further than necessary:
 
-- Any red `Connectivity` → go back to step 4 and read the server logs.
-- Any red `Read` with a green `Connectivity` → bug in `Get`/`Enumerate`/`Pull` (step 3).
-- Any red `Mutation` with a green `Read` → bug in `Create`/`Modify`/`Delete` (step 3).
+- Any red `Connectivity` → go back to step 5 and read the server logs.
+- Any red `Read` with a green `Connectivity` → bug in `Get`/`Enumerate`/`Pull` (step 4).
+- Any red `Mutation` with a green `Read` → bug in `Create`/`Modify`/`Delete` (step 4).
 
 The typical server-side errors are decoded in [06-depannage.md](06-depannage.md).

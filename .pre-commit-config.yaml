@@ -7,6 +7,11 @@
 #   - ruff + flake8 style (naming, imports, line length, mutable defaults)
 #   - mypy --strict (full typing; src/ and classes/ are fully typed)
 #
+# BLOCKING (every commit, also on changed tests/ and tools/test/ files):
+#   - pytest level 0, i.e. everything that needs no directory. See
+#     documentation/05-tests.md for the ladder and why this one is cheap
+#     enough to block on.
+#
 # ADVISORY (manual stage):
 #   - pylint
 #   Run it with:  pre-commit run --hook-stage manual --all-files
@@ -54,6 +59,25 @@ repos:
         language: system
         types: [python]
         files: ^(src|classes|samba_adws)/(?!nettcp/|wcf/)
+        pass_filenames: false
+
+      # -m "not dc" is what keeps this hook honest on the DC itself: there
+      # python3-samba imports, tests/conftest.py stops skipping the `dc`
+      # cases, and an unscoped run would provision-test the live directory
+      # on every commit. Deselecting the marker gives the same level-0 set
+      # on a workstation and on a DC. --ignore=tests/dc says the same thing
+      # by path, so the guarantee survives a future tests/dc file that
+      # forgets `pytestmark = pytest.mark.dc`. pass_filenames is false
+      # because the suite is selected by pyproject's testpaths, not by what
+      # changed. `python3`, not `python`: Debian has no /usr/bin/python
+      # unless python-is-python3 is installed, and language: system runs the
+      # entry as written.
+      - id: pytest
+        name: pytest level 0 (no directory needed, blocking)
+        entry: python3 -m pytest -q -m "not dc" --ignore=tests/dc
+        language: system
+        types: [python]
+        files: ^(src|classes|samba_adws|tests|tools/test)/
         pass_filenames: false
 
       - id: pylint
