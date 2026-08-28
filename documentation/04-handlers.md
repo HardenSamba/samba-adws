@@ -13,6 +13,22 @@ One handler = one file in [classes/handlers/](../classes/handlers/). It processe
 | `…/transfer/Delete` | [`transfer.py`](../classes/handlers/transfer.py) | `Remove-ADUser` |
 | `…/transfer/Create` | [`crud.py`](../classes/handlers/crud.py) — `CRUDHandler` | `New-ADUser`, `New-ADGroup` |
 
+> **Group membership writes go through `Put`, not through an action of their own.**
+> `IActiveDirectoryAccountManagement` declares six operations and none of them
+> adds or removes a member, so `Add-ADGroupMember` and `Remove-ADGroupMember`
+> both arrive as `…/transfer/Put` on the *group* DN, carrying
+> `<da:ModifyRequest><da:Change Operation="add">` (or `"delete"`) on the
+> `member` attribute. Routing is
+> [`transfer.py`](../classes/handlers/transfer.py) → `ModifyHandler._modify_attrs`
+> ([`modify.py`](../classes/handlers/modify.py)) → `LdapAttrBuilder._flag_for`
+> ([`ldap_attr_builder.py`](../classes/directory/ldap_attr_builder.py)), which
+> maps `add` → `FLAG_MOD_ADD` and `delete`/`remove` → `FLAG_MOD_DELETE`.
+> Covered by `tests/unit/test_group_membership_write_path.py` (parse and
+> routing, offline) and `tests/dc/test_member_write_flags.py` (LDB flags).
+> A `GroupHandler` registered under the key `Groups` used to sit beside this
+> path; it was unreachable by any real client and has been removed
+> (see [samba-adws#4](https://github.com/HardenSamba/samba-adws/issues/4)).
+
 ### WS-Enumeration (paginated search)
 
 | SOAP action | Handler | Description |
@@ -99,7 +115,6 @@ relate to its request too.
 |---|---|---|
 | `Search` | [`search.py`](../classes/handlers/search.py) | arbitrary IMDA searches |
 | `Schema` | [`schema.py`](../classes/handlers/schema.py) | class and attribute introspection |
-| `Groups` | [`groups.py`](../classes/handlers/groups.py) | bulk group operations |
 | `GetADGroupMember` | [`get_ad_group_member.py`](../classes/handlers/get_ad_group_member.py) | `Get-ADGroupMember` |
 | `GetADPrincipalGroupMembership` | [`get_ad_principal_group_membership.py`](../classes/handlers/get_ad_principal_group_membership.py) | `Get-ADPrincipalGroupMembership` |
 | `GetADPrincipalAuthorizationGroup` | [`get_ad_principal_authorization_group.py`](../classes/handlers/get_ad_principal_authorization_group.py) | `Get-ADPrincipalAuthorizationGroup` (recursive token groups) |
@@ -145,6 +160,13 @@ HANDLER_FACTORIES = (
 2. Failing that, takes the **last segment** of the URL (`http://…/Foo/Bar` → `Bar`) and looks it up in `HANDLER_FACTORIES`.
 
 This is what lets the ADWS-specific actions (Microsoft proprietary URLs) reach the right handler through a simple naming convention.
+
+> **The suffix rule has no allowlist in front of it.** `ADWSDispatcher._invoke`
+> hands `context.action` straight to `resolve()`, so *any* action URI whose last
+> segment matches a registration key reaches that handler, whatever host or path
+> precedes it. A registration key is therefore a public entry point for every
+> authenticated caller, not merely a label for the URL Microsoft happens to send.
+> Register a key only for a handler you are willing to have reached that way.
 
 ## Handler contract
 

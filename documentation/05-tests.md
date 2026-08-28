@@ -153,9 +153,16 @@ Loads the Python handlers directly and passes them hand-built `RequestContext` o
 Every registered handler is driven here, and each one is asserted to answer
 with XML that parses and whose `<a:RelatesTo>` echoes the request's
 `MessageID` — the invariant of `CLAUDE.md` section 5, and the assertion that
-holds for all twenty-nine without guessing at the shape of each body. A handler
-that needs a richer request than a bare envelope answers with a fault, and a
-fault has to relate to its request too.
+holds for every registered key without guessing at the shape of each body. A
+handler that needs a richer request than a bare envelope answers with a fault,
+and a fault has to relate to its request too. The case list is derived from
+`tests/dc/handler_actions.py`, so registering or removing a handler moves it
+without anyone having to recount the cases here.
+
+One file in `tests/dc/` drives no handler: `test_member_write_flags.py` pins the
+LDB flags a group-membership `Put` ends up applying. It needs `ldb`, so it
+carries the `dc` marker like the rest of level 1 even though it never builds a
+`RequestContext`.
 
 This replaces `tools/test/test_handlers.py`, whose three checks moved here. That
 script took a `reg` argument that pytest read as a fixture, so its three checks
