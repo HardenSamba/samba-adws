@@ -1,44 +1,37 @@
 """Release handler - Close enumeration context and free resources"""
 import html
 
-from classes.parsing.context import RequestContext
 from src.enumeration.enumeration import get_enumeration_registry
-from classes.faults.exceptions import ADWSException
+
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
 
 
+# Handles WS-Enumeration Release: drops the cached results of an enumeration
+# context, or faults when the request names none.
 class ReleaseHandler(BaseHandler):
     """Handles WS-Enumeration Release requests
 
     Closes enumeration context and removes cached results.
     """
 
+    # Releases the named context and answers with an empty body, or with the
+    # same invalid-context fault its siblings return when no context is named.
+    # A context the registry no longer holds is already released, so that stays
+    # a success: the client asked for a state that is the state it is in.
     def handle(self, context: RequestContext) -> str:
         self.log_request(context)
+        enum_context_id = context.enumeration_context
+        if not enum_context_id:
+            return str(
+                self.faults.invalid_enumeration_context(context.message_id, "(missing)")
+            )
+        self.logger.info(f"[RELEASE] Context ID: {enum_context_id}")
+        get_enumeration_registry(self.logger).release_context(enum_context_id)
+        self.logger.info("[RELEASE] Context deleted successfully")
+        return self._build_release_response(context)
 
-        try:
-            enum_context_id = context.enumeration_context
-
-            if not enum_context_id:
-                raise ADWSException("EnumerationContext not provided in Release request")
-
-            self.logger.info(f"[RELEASE] Context ID: {enum_context_id}")
-
-            enum_registry = get_enumeration_registry(self.logger)
-            enum_registry.release_context(enum_context_id)
-
-            self.logger.info("[RELEASE] Context deleted successfully")
-
-            response_xml = self._build_release_response(context)
-
-            return response_xml
-
-        except ADWSException:
-            raise
-        except Exception as e:
-            self.logger.error(f"[RELEASE] Error: {str(e)}")
-            raise ADWSException(f"Release failed: {str(e)}") from e
-
+    # Renders the bodyless ReleaseResponse, related to the request it answers.
     def _build_release_response(self, context: RequestContext) -> str:
         response_xml = (
             '<?xml version="1.0" encoding="utf-8"?>'

@@ -16,7 +16,6 @@ from classes.handlers.get_ad_principal_authorization_group import (
 from classes.handlers.get_ad_principal_group_membership import GetADPrincipalGroupMembershipHandler
 from classes.handlers.get_status import GetStatusHandler
 from classes.handlers.get_version import GetVersionHandler
-from classes.handlers.groups import GroupHandler
 from classes.handlers.modify import ModifyHandler
 from classes.handlers.move_operation_master_role import MoveOperationMasterRoleHandler
 from classes.handlers.notify import NotifyHandler
@@ -38,7 +37,7 @@ __all__ = [
     "ReleaseHandler", "RenewHandler", "GetStatusHandler",
     "TransferHandler", "SearchHandler",
     "CRUDHandler", "CreateHandler", "ModifyHandler", "DeleteHandler",
-    "GroupHandler", "SchemaHandler",
+    "SchemaHandler",
     "SetPasswordHandler", "ChangePasswordHandler", "TranslateNameHandler",
     "GetADDomainHandler", "GetADDomainControllerHandler",
     "GetADForestHandler", "GetVersionHandler",

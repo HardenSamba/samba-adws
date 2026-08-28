@@ -5,6 +5,7 @@
 # the two together, so one cannot drift from the other quietly.
 __version__ = "1.0.0"
 
+from samba_adws._search_base import is_guid_base
 from samba_adws._search_validation import SCOPES, SearchQuery, search_query
 from samba_adws.client import ADWSClient
 from samba_adws.errors import ADWSClientError
@@ -16,6 +17,7 @@ __all__ = (
     "ADWSSearchClient",
     "SCOPES",
     "SearchQuery",
+    "is_guid_base",
     "search_query",
     "__version__",
 )

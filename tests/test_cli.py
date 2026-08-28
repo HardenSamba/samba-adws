@@ -10,6 +10,7 @@ The transport is scripted, as it is for the client tests: nothing here opens a
 socket or needs a directory.
 """
 
+import functools
 import json
 from typing import Any, Callable, List, Optional
 
@@ -20,9 +21,14 @@ from samba_adws._codec import decode_xml, encode_xml
 from samba_adws._search_request import ENUMERATE_RESPONSE_ACTION, PULL_RESPONSE_ACTION
 from samba_adws.cli import main
 from src.soap.namespaces import AD, ADDATA, SOAP_ENV, WSA, WSEN, XSD, XSI
+from tests.client_helpers import NAMING_CONTEXT, ROOT_DSE_BODY, failing_response, response_for
 from tests.scripted_transport import ScriptedTransport
 
 BASE = "OU=Staff,DC=example,DC=test"
+NAMING_ARGV = ["naming-context", "--server", "dc.example.test"]
+# Longer than `cli_text.WIDTH`, which four labels of ordinary length reach.
+LONG_CONTEXT = "DC=directory,DC=engineering,DC=northamerica,DC=corporate,DC=example,DC=test"
+GUID = "6c8dd5f1-6b3c-4f1a-9d33-6b1f0a2e77aa"
 NAMESPACES = (
     f'xmlns:s="{SOAP_ENV}" xmlns:a="{WSA}" xmlns:wsen="{WSEN}" xmlns:ad="{AD}" '
     f'xmlns:addata="{ADDATA}" xmlns:xsi="{XSI}" xmlns:xsd="{XSD}"'
@@ -143,6 +149,42 @@ def test_an_unknown_scope_never_reaches_the_network(
     assert transport.requests == []
 
 
+# A GUID base travels as the extended DN form, read back by the server's parser.
+#
+# The console holds GUIDs because a distinguished name moves when somebody
+# renames a container. This proves the command line carries one, not just the
+# library: it decodes the bytes the transport actually received.
+@pytest.mark.parametrize("typed", [GUID, f"<GUID={GUID}>"])
+def test_a_guid_base_travels_as_the_extended_dn_form(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any, typed: str
+) -> None:
+    import xml.etree.ElementTree as ET
+
+    from classes.parsing.context_enumeration import read_enumerate
+
+    transport = install(monkeypatch, one_page)
+    argv = ["search", "--server", "dc.example.test", "--base", typed]
+    status, _, _ = run(monkeypatch, capsys, argv)
+
+    assert status == 0
+    opened = ET.fromstring(decode_xml(transport.requests[0]))
+    assert read_enumerate(opened)["base_dn"] == f"<GUID={GUID}>"
+
+
+# A base that opens with `<GUID=` and carries no GUID never reaches the network.
+def test_a_malformed_guid_base_never_reaches_the_network(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    transport = install(monkeypatch, one_page)
+    argv = ["search", "--server", "dc.example.test", "--base", "<GUID=not-a-guid>"]
+    status, out, err = run(monkeypatch, capsys, argv)
+
+    assert status == 1
+    assert out == ""
+    assert "InvalidArgument" in err
+    assert transport.requests == []
+
+
 # The attributes are the directory's own, not renamed on the way out.
 def test_the_attributes_keep_the_names_the_directory_gave_them(
     monkeypatch: pytest.MonkeyPatch, capsys: Any
@@ -151,6 +193,52 @@ def test_the_attributes_keep_the_names_the_directory_gave_them(
     _, out, _ = run(monkeypatch, capsys)
 
     assert "sAMAccountName" in json.loads(out)["objects"][0]
+
+
+# THE TOP OF THE DOMAIN IS ONE JSON DOCUMENT AND A ZERO STATUS.
+#
+# `search` requires a `--base` and nothing published one, so `hardensamba-webui`
+# could not start a listing at all: it had no distinguished name to begin from
+# and no way to ask for one. samba-adws#28.
+def test_the_naming_context_is_one_document_and_a_zero_status(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    body = ROOT_DSE_BODY.format(context=NAMING_CONTEXT)
+    install(monkeypatch, functools.partial(response_for, body=body))
+    status, out, err = run(monkeypatch, capsys, NAMING_ARGV)
+
+    assert status == 0
+    assert err == ""
+    assert json.loads(out) == {"defaultNamingContext": NAMING_CONTEXT}
+
+
+# A NAMING CONTEXT IS PRINTED WHOLE, WHATEVER ITS LENGTH.
+#
+# `--format text` trims a value at `cli_text.WIDTH` because a page of objects
+# is a spot check. This answer is not: it is the one value the operator pastes
+# into `--base`, and a real domain passes 60 characters with four ordinary
+# labels. An ellipsised distinguished name is worse than none, because it looks
+# like something that can be used.
+def test_a_long_naming_context_is_not_trimmed(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    body = ROOT_DSE_BODY.format(context=LONG_CONTEXT)
+    install(monkeypatch, functools.partial(response_for, body=body))
+    _, out, _ = run(monkeypatch, capsys, NAMING_ARGV + ["--format", "text"])
+
+    assert out == f"defaultNamingContext: {LONG_CONTEXT}\n"
+
+
+# It fails the way every other verb fails: non-zero, with stdout left empty.
+def test_an_unreachable_controller_leaves_stdout_empty(
+    monkeypatch: pytest.MonkeyPatch, capsys: Any
+) -> None:
+    install(monkeypatch, failing_response)
+    status, out, err = run(monkeypatch, capsys, NAMING_ARGV)
+
+    assert status == 1
+    assert out == ""
+    assert "connection refused" in err
 
 
 # STATUS ANSWERS ONE JSON DOCUMENT, WHICH IS THE WHOLE POINT OF IT.
@@ -167,6 +255,7 @@ def test_status_is_one_json_document_and_a_zero_status(capsys: Any) -> None:
     said = json.loads(out)
     assert said["module"] == "samba-adws"
     assert "search" in said["verbs"]
+    assert "naming-context" in said["verbs"]
 
 
 # It opens nothing: a probe must not need a base, a query or a credential.
