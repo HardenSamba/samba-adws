@@ -12,5 +12,5 @@
 # (the PyPI packages are unrelated and wrong) and do NOT use
 # --break-system-packages on the DC's system Python.
 #
-# Dev/lint tooling (ruff, flake8, mypy, pylint, pre-commit) lives in
+# Dev/lint/test tooling (ruff, flake8, mypy, pylint, pytest, pre-commit) lives in
 # requirements-dev.txt and is only needed on a developer workstation.

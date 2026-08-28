@@ -8,3 +8,9 @@ flake8-functions>=0.0.8
 pylint>=3.0
 mypy>=1.13
 pre-commit>=3.5
+
+# pytest is not optional: .pre-commit-config.yaml runs the level-0 suite as a
+# BLOCKING hook with `language: system`, so pre-commit will not install it into
+# an isolated env. Without it here, following the documented setup line leaves
+# a hook that cannot start.
+pytest>=8.0
