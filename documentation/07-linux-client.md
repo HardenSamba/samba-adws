@@ -65,6 +65,7 @@ The stable signatures are:
 ```python
 ADWSClient(server: str, port: int = 9389, timeout: float = 30.0)
 get_by_dn(identity: str, properties: Sequence[str] = ()) -> Mapping[str, object]
+naming_context(kind: str = "defaultNamingContext") -> str
 ```
 
 `identity` is a distinguished name. An empty property sequence requests the
@@ -73,6 +74,24 @@ Single text values are returned as `str`, `xsd:base64Binary` values as `bytes`,
 and multi-valued attributes as tuples. Every failure crosses the API as
 `ADWSClientError`, whose `code`, `category`, and `target` fields are suitable
 for command-line or PowerShell error translation.
+
+`naming_context` is the one call that needs no distinguished name: it fetches
+the RootDSE — the object the server answers for the reserved reference
+`11111111-1111-1111-1111-111111111111` — and returns the attribute named by
+`kind`, `defaultNamingContext` by default. That value is what every other call
+needs and no other call can supply: `get_by_dn` wants a DN, a search wants a
+base, and a caller that has just been told a controller's name has neither. A
+RootDSE that publishes no such attribute raises `ADWSClientError` with code
+`MalformedResponse` rather than returning an empty base that would silently
+search the whole forest root or nothing at all.
+
+It returns **one** context, so `kind` must name an attribute that holds a
+single distinguished name. The multi-valued `namingContexts` decodes to a tuple
+and is refused with the same code and a message that says so — not reduced to
+whichever value came first, which would hand a caller one context out of
+several with no way to tell which, and not reported as unpublished, which would
+blame a server that published it. Use `get_by_dn` on the RootDSE reference to
+read every context at once.
 
 Each operation creates a unique WS-Addressing `MessageID`. The response must
 contain the same `RelatesTo`; missing or mismatched correlation, malformed WCF
@@ -84,6 +103,7 @@ applies to connection, authentication, reads, and writes.
 | Surface | Linux client status |
 |---|---|
 | Resource endpoint, WS-Transfer Get by DN | Supported |
+| WS-Transfer Get of the RootDSE (one naming context) | Supported |
 | Optional IMDA attribute projection | Supported |
 | SOAP fault decoding | Supported |
 | WS-Enumeration `Enumerate` and `Pull` | Supported |
@@ -278,6 +298,42 @@ behaviour and its consumers render it, and a consumer that imported this
 package would be holding this module's code in its own process — with
 `python3-samba` underneath, which is not thread-safe and is why the server
 forks rather than threads.
+
+### Where a consumer starts: the top of the domain
+
+`search` requires a `--base`, and until now nothing published one. A console
+knows a controller's name and nothing else; it never holds a distinguished name
+until it has listed something, and it cannot list anything until it knows which
+container to list. So the first call is:
+
+```bash
+samba-adws naming-context --server dc.example.test
+```
+
+```json
+{"defaultNamingContext":"DC=example,DC=test"}
+```
+
+That value is exactly what `search --base` wants. The server has answered this
+since the RootDSE branch of `GetHandler` was written — it is the object
+`Get-ADRootDSE` reads — and no verb named it, which is why a working module
+looked like one a console could not use. samba-adws#28.
+
+**It is a verb of its own, not a field of `status`.** `status` promises a probe
+that opens nothing: no base, no query, no credential, no socket. Reading a
+naming context opens one, against a named controller, and fails for every
+reason a directory read fails for. Folding it into `status` would make the one
+call that must always answer depend on a domain being reachable — which is the
+question `status` exists to answer without asking a domain.
+
+**The key is the directory's own**, as the attributes of `search` are: the
+RootDSE calls it `defaultNamingContext` and it leaves unchanged. `--format
+text` renders it as `defaultNamingContext: DC=example,DC=test`, whole: a
+listing trims a value that is longer than a line, because a page of objects is
+a spot check, but this answer is the value the operator pastes into `--base`
+and an ellipsised distinguished name only looks like one that can be used.
+
+### Listing what is under it
 
 ```bash
 samba-adws search --server dc.example.test     --base "OU=Staff,DC=example,DC=test"     --scope OneLevel     --filter "(objectClass=user)"     --properties sAMAccountName,displayName,whenChanged     --count 50
