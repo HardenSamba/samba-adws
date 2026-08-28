@@ -6,6 +6,7 @@
 __version__ = "1.0.0"
 
 from samba_adws._search_validation import SCOPES, SearchQuery, search_query
+from samba_adws.accounts import NewUser, create_user
 from samba_adws.client import ADWSClient
 from samba_adws.errors import ADWSClientError
 from samba_adws.search_client import ADWSSearchClient
@@ -16,6 +17,8 @@ __all__ = (
     "ADWSClientError",
     "ADWSSearchClient",
     "ADWSWriteClient",
+    "NewUser",
+    "create_user",
     "SCOPES",
     "SearchQuery",
     "search_query",
