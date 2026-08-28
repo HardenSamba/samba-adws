@@ -4,7 +4,7 @@ Four levels, in the order to run them.
 
 | Level | Suite | Where | What | When |
 |---|---|---|---|---|
-| 0 | `pytest tests/unit` | Anywhere | The layers that need no directory: WCF, NMF, SOAP envelope, value encoding, request parsing, handler coverage | Every commit |
+| 0 | `pytest tests/unit` | Anywhere | The layers that need no directory: WCF, NMF, SOAP envelope, value encoding, request parsing, the scope-dependent attribute projection, handler coverage | Every commit |
 | 1 | `pytest tests/dc` | Linux DC | Every registered handler, in isolation, against a real directory | Before deployment |
 | 2 | `tools/test/test_adws.py` | Linux DC | Operator diagnostic: port, imports, parser | First start, and when something is wrong |
 | 3 | `Test-ADWS-Sovereign.ps1` | Windows | End to end, real PowerShell cmdlets | Final validation |
