@@ -91,3 +91,35 @@ def test_every_patch_names_the_file_it_changes(patch: Path) -> None:
 @pytest.mark.parametrize("patch", patches(), ids=lambda p: p.name)
 def test_no_carriage_returns(patch: Path) -> None:
     assert b"\r" not in patch.read_bytes()
+
+
+# The C the patch inserts, with the leading '+' removed and runs of whitespace
+# flattened, so an assertion can speak about what the patch does.
+def added_c(patch: Path) -> str:
+    added = [line[1:] for line in patch.read_text(encoding="utf-8").split("\n")
+             if line.startswith("+") and not line.startswith("+++")]
+    return " ".join(" ".join(added).split())
+
+
+# Everything above checks the patch is a patch; this checks it is the RIGHT
+# patch. Each assertion kills a mutation that the shape checks let through: a
+# default of true, clearing the bit rather than setting it, writing the
+# request-side constant the server must never answer with, and a parameter name
+# that drifts from the one the description promises an administrator.
+@pytest.mark.parametrize("patch", patches(), ids=lambda p: p.name)
+def test_the_advertise_patch_sets_the_answer_side_bit_and_stays_off(patch: Path) -> None:
+    if "advertise-adws" not in patch.name:
+        pytest.skip("not the ADWS advertisement patch")
+    body = added_c(patch)
+    assert 'lpcfg_parm_bool(lp_ctx, NULL, "adws", "advertise", false)' in body, (
+        "the bit must be gated on adws:advertise and default to false: announcing "
+        "ADWS with nothing on 9389 makes a client connect and fail")
+    assert "server_type |= DS_SERVER_WEBSERV;" in body, (
+        "the patch must SET DS_SERVER_WEBSERV, the flag a server answers with")
+    assert "DS_WEB_SERVICE_REQUIRED" not in body, (
+        "DS_WEB_SERVICE_REQUIRED is what the client sends; writing it into "
+        "server_type sets a bit with no meaning in that field")
+    assert "&=" not in body and "&= ~" not in body
+    description = patch.read_text(encoding="utf-8").split("--- a/")[0]
+    assert "adws:advertise" in description, (
+        "the description must name the parameter the code actually reads")
