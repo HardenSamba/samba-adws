@@ -11,6 +11,19 @@ from samba_adws._request import GET_RESPONSE_ACTION
 from src.soap.namespaces import AD, ADDATA, DA, SOAP_ENV, WSA, XSD, XSI
 from tests.scripted_transport import ScriptedTransport
 
+# One RootDSE answer, in the shape the server renders it: an IMDA
+# `PartialAttribute` holding a DN-syntax value as `xsd:string`. Shared by the
+# client and the command tests so that a change of shape cannot update only
+# half of the evidence; `{context}` is the distinguished name under test.
+ROOT_DSE_BODY = (
+    '<da:BaseObjectSearchResponse><da:PartialAttribute>'
+    '<addata:defaultNamingContext LdapSyntax="DSDNString">'
+    '<ad:value xsi:type="xsd:string">{context}</ad:value>'
+    '</addata:defaultNamingContext></da:PartialAttribute>'
+    '</da:BaseObjectSearchResponse>'
+)
+NAMING_CONTEXT = "DC=example,DC=test"
+
 
 # Builds a WCF response correlated to the MessageID in a scripted request.
 def response_for(payload: bytes, body: str, relates_to: str = "") -> bytes:

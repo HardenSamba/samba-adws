@@ -7,7 +7,7 @@ from samba_adws import __version__
 # The verbs this command installs. Named rather than derived from the parser,
 # because a consumer reads this to decide what it may call and a list built
 # from the parser would grow a verb the moment somebody added a flag.
-VERBS = ("search", "status")
+VERBS = ("naming-context", "search", "status")
 
 
 # What this command is and what it would talk to, without talking to anything.

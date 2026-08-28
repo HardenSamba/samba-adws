@@ -5,6 +5,7 @@ from typing import Mapping, Optional, Sequence
 from samba_adws._codec import decode_xml, encode_xml
 from samba_adws._request import build_get_request
 from samba_adws._response import parse_get_response
+from samba_adws._root_dse import DEFAULT_NAMING_CONTEXT, ROOT_DSE_IDENTITY, naming_context_of
 from samba_adws._transport import ClientTransport, open_transport
 from samba_adws._validation import normalize_properties, validate_connection, validate_identity
 from samba_adws.errors import ADWSClientError
@@ -37,6 +38,18 @@ class ADWSClient:
             if error.target is None:
                 error.target = identity
             raise
+
+    # Returns one naming context published by the RootDSE.
+    #
+    # The only question a caller can ask before it knows anything: a search
+    # needs a base, and a console never holds a distinguished name until
+    # something published one.
+    #
+    # `kind` names an attribute that holds a single distinguished name. The
+    # multi-valued `namingContexts` is refused rather than reduced to whichever
+    # value came first, because this returns one context and cannot say so.
+    def naming_context(self, kind: str = DEFAULT_NAMING_CONTEXT) -> str:
+        return naming_context_of(self.get_by_dn(ROOT_DSE_IDENTITY, (kind,)), kind)
 
     # Exchanges one payload and normalizes transport failures.
     def _exchange(self, payload: bytes, target: str) -> bytes:

@@ -10,6 +10,11 @@ not thread-safe and is why the server forks rather than threads.
 **One page per invocation.** See `cli_search`. The caller pages by asking again
 with the cursor it was given.
 
+**`naming-context` is where a consumer starts.** `search` requires a `--base`
+and a console never knows a distinguished name until something published one.
+See `cli_naming` for why it is a verb of its own rather than a field of
+`status`. samba-adws#28.
+
 **Read only, for now.** `search` is the verb `hardensamba-webui#9` and
 `samba-adws#20` were blocked on; the write verbs exist on `ADWSWriteClient` and
 are not exposed here yet, because a command that can delete an account needs a
@@ -26,7 +31,8 @@ perfectly therefore read as installed and not answering. samba-adws#25.
 import argparse
 from typing import List, Optional
 
-from samba_adws import cli_format, cli_output, cli_search, cli_status
+from samba_adws import cli_format, cli_naming, cli_output, cli_search, cli_status
+from samba_adws.client import ADWSClient
 from samba_adws.errors import ADWSClientError
 from samba_adws.search_client import ADWSSearchClient
 
@@ -52,10 +58,22 @@ def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="samba-adws", parents=[common],
                                    description=__doc__.splitlines()[0])
     verbs = root.add_subparsers(dest="verb", required=True)
+    top = verbs.add_parser("naming-context", help="the top of the domain, for --base",
+                           parents=[common])
+    cli_naming.add_arguments(top, DEFAULT_PORT)
     add_search(verbs.add_parser("search", help="one page of objects in a container",
                                 parents=[common]))
     verbs.add_parser("status", help="whether this command answers", parents=[common])
     return root
+
+
+# Reads the top of the domain and prints it, or the reason it could not.
+def naming_context(options: argparse.Namespace) -> int:
+    try:
+        client = ADWSClient(options.server, options.port)
+        return cli_output.emit(cli_naming.run(client), cli_format.wanted(options))
+    except ADWSClientError as error:
+        return cli_output.refuse(f"{error.code}: {error}")
 
 
 # Runs one search and prints the page, or the reason it could not.
@@ -74,6 +92,8 @@ def search(options: argparse.Namespace) -> int:
 # The entry point the package installs.
 def main(argv: Optional[List[str]] = None) -> int:
     options = parser().parse_args(argv)
+    if options.verb == "naming-context":
+        return naming_context(options)
     if options.verb == "search":
         return search(options)
     if options.verb == "status":
