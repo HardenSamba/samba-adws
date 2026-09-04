@@ -16,6 +16,7 @@ class ADWSClient:
     server: str
     port: int
     timeout: float
+    _held: Optional[ClientTransport]
 
     # Stores validated connection settings without opening a socket.
     def __init__(self, server: str, port: int = 9389, timeout: float = 30.0) -> None:
@@ -23,6 +24,7 @@ class ADWSClient:
         self.server = server
         self.port = port
         self.timeout = float(timeout)
+        self._held = None
 
     # Retrieves one object by distinguished name with an optional projection.
     def get_by_dn(
@@ -52,10 +54,16 @@ class ADWSClient:
         return naming_context_of(self.get_by_dn(ROOT_DSE_IDENTITY, (kind,)), kind)
 
     # Exchanges one payload and normalizes transport failures.
+    #
+    # A sequence whose messages must reach one server process opens the
+    # connection itself and parks it in `_held`; this then borrows it and
+    # leaves it open. `ADWSSearchClient.page` says why that is not optional.
     def _exchange(self, payload: bytes, target: str) -> bytes:
-        transport = None
+        held = self._held
+        transport: Optional[ClientTransport] = held
         try:
-            transport = open_transport(self.server, self.port, self.timeout)
+            if transport is None:
+                transport = open_transport(self.server, self.port, self.timeout)
             return transport.exchange(payload)
         except ADWSClientError:
             raise
@@ -63,7 +71,8 @@ class ADWSClient:
             message = str(error) or "ADWS transport failed"
             raise ADWSClientError(message, "TransportError", target) from error
         finally:
-            self._close(transport)
+            if held is None:
+                self._close(transport)
 
     # Closes a transport without masking its request or response error.
     @staticmethod

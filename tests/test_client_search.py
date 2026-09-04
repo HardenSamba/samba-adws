@@ -18,10 +18,11 @@ rename that would otherwise be found by an administrator.
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import pytest
 
+import samba_adws.client as client_module
 from classes.parsing.context_enumeration import read_enumerate, read_pull_release
 from samba_adws._codec import decode_xml, encode_xml
 from samba_adws._search_base import is_guid_base
@@ -36,6 +37,7 @@ from samba_adws.errors import ADWSClientError
 from samba_adws.search_client import ADWSSearchClient
 from src.soap.namespaces import AD, ADDATA, ADLQ, SOAP_ENV, WSA, WSEN, XSD, XSI
 from tests.client_helpers import install_transport
+from tests.scripted_transport import ScriptedTransport
 
 SERVER = "dc.example.test"
 BASE = "OU=Staff,OU=Paris,DC=example,DC=test"
@@ -103,6 +105,24 @@ def client(monkeypatch: pytest.MonkeyPatch, script: object) -> ADWSSearchClient:
     return ADWSSearchClient(SERVER)
 
 
+# A client that hands out a NEW transport per connection, and the list of them.
+#
+# `install_transport` returns one instance however many times it is asked, so a
+# client that opened a connection per message looks identical to one that did
+# not. The server does not: it forks, and only the child that ran the Enumerate
+# holds the context. Counting is the only way to see the difference offline.
+def counted(monkeypatch: pytest.MonkeyPatch) -> List[ScriptedTransport]:
+    opened: List[ScriptedTransport] = []
+
+    # Records every connection the client asks for.
+    def factory(server: str, port: int, timeout: float) -> ScriptedTransport:
+        opened.append(ScriptedTransport(two_pages))
+        return opened[-1]
+
+    monkeypatch.setattr(client_module, "open_transport", factory)
+    return opened
+
+
 # The server's own parser reads the base, scope and filter this client sends.
 def test_the_server_understands_the_enumerate_request() -> None:
     query = search_query(BASE, "OneLevel", "(objectClass=user)", ("sAMAccountName", "cn"))
@@ -141,6 +161,41 @@ def test_the_requests_address_the_enumeration_endpoint() -> None:
 def test_a_search_pages_until_the_sequence_ends(monkeypatch: pytest.MonkeyPatch) -> None:
     found = list(client(monkeypatch, two_pages).search(search_query(BASE)))
     assert [entry["sAMAccountName"] for entry in found] == ["m.dupont", "l.bernard", "c.arnaud"]
+
+
+# One page is one connection, because the context lives in one server process.
+#
+# This is the regression that made `samba-adws search` fault on its first page
+# against a real controller: the Enumerate reached one forked child and the
+# Pull reached another, which answered `Invalid or expired enumeration
+# context` for a context it had been handed a moment earlier.
+def test_a_page_keeps_enumerate_and_pull_on_one_connection(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    opened = counted(monkeypatch)
+    objects, cursor = ADWSSearchClient(SERVER).page(search_query(BASE))
+    assert [entry["sAMAccountName"] for entry in objects] == ["m.dupont", "l.bernard"]
+    assert cursor == "ctx-2"
+    assert len(opened) == 1
+    assert opened[0].closed
+
+
+# A whole search stays on that one connection too, however many batches it takes.
+def test_a_search_stays_on_one_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+    opened = counted(monkeypatch)
+    found = list(ADWSSearchClient(SERVER).search(search_query(BASE)))
+    assert [entry["sAMAccountName"] for entry in found] == ["m.dupont", "l.bernard", "c.arnaud"]
+    assert len(opened) == 1
+    assert opened[0].closed
+
+
+# A single Get still opens and closes its own connection, as it always did.
+def test_one_off_requests_still_open_their_own_connection(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    opened = counted(monkeypatch)
+    searcher = ADWSSearchClient(SERVER)
+    searcher.pull("ctx-1")
+    searcher.pull("ctx-1")
+    assert len(opened) == 2
 
 
 # The end is EndOfSequence, never an empty batch.

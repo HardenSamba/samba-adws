@@ -12,6 +12,13 @@ back after that is told so rather than silently restarted, because silently
 restarting a paged listing shows an operator the first page again and calls it
 the second.
 
+**A cursor does not outlive the connection that produced it.** The server forks
+per connection and keeps its enumeration contexts in the child that answered
+the Enumerate, so a cursor handed to a later invocation of this command names a
+context that died with that process, and the server refuses it. Ask for the
+page size you want with `--count`; a resumable cursor needs the server to hold
+enumerations somewhere the next child can reach, which it does not yet do.
+
 **Attributes are the directory's own.** `objectReferenceProperty`,
 `distinguishedName`, `sAMAccountName` and the rest arrive as the server named
 them and leave unchanged. A consumer that wanted different names would be
@@ -33,11 +40,6 @@ def query_from(base: str, scope: str, ldap_filter: str, properties: str) -> Sear
     return search_query(base, scope, ldap_filter, wanted)
 
 
-# Opens a search, or continues one the caller already holds a cursor for.
-def open_or_continue(client: ADWSSearchClient, query: SearchQuery, cursor: str) -> str:
-    return cursor if cursor else client.open_search(query)
-
-
 # One page, in the shape this command promises.
 #
 # `cursor` is empty at the end of the sequence, which is how a caller knows to
@@ -48,7 +50,10 @@ def page(objects: Sequence[Mapping[str, object]], cursor: Optional[str]) -> Dict
 
 
 # Runs one page of a search against one server.
+#
+# The Enumerate and the Pull travel together on one connection, which is what
+# `ADWSSearchClient.page` is for: the server keeps the context in the process
+# that made it, and a second connection is a second process.
 def run(client: ADWSSearchClient, query: SearchQuery, cursor: str, count: int) -> Dict[str, Any]:
-    context = open_or_continue(client, query, cursor)
-    objects, following = client.pull(context, count)
+    objects, following = client.page(query, cursor, count)
     return page(objects, following)
