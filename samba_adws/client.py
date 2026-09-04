@@ -10,6 +10,15 @@ from samba_adws._transport import ClientTransport, open_transport
 from samba_adws._validation import normalize_properties, validate_connection, validate_identity
 from samba_adws.errors import ADWSClientError
 
+# `open_transport` is re-exported on purpose. This module is where the
+# transport factory is looked up: `search_client` reaches it as
+# `client.open_transport` so that one connection can be held across an
+# enumeration, and the offline tests replace it on this module and nowhere
+# else. Under `mypy --strict` an import is not an export unless it is named
+# here, and leaving it implicit made the typing gate fail on the one name two
+# other files depend on.
+__all__ = ("ADWSClient", "open_transport")
+
 
 # Retrieves directory objects through the Samba ADWS Resource endpoint.
 class ADWSClient:

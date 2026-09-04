@@ -325,6 +325,18 @@ delete(identity: str) -> None
 set_password(identity: str, password: str) -> None
 ```
 
+`ADWSMembershipClient` extends `ADWSWriteClient` with the two membership verbs,
+so one object carries every write:
+
+```python
+add_member(group: str, member: str) -> None
+remove_member(group: str, member: str) -> None
+```
+
+Both take distinguished names. See
+[Group membership is a delta, never a replace](#group-membership-is-a-delta-never-a-replace)
+for why they exist and what a redundant call answers.
+
 **No distinguished name is ever composed or parsed on this side.** `create`
 takes the relative name and the parent separately and sends them as the two
 fields the server composes a name from; `rename` takes a new relative name and a
@@ -406,6 +418,49 @@ exists to hold that distinction, which is why the write path does not go through
 
 Each response is also checked against the reply action its verb expects, so an
 acknowledgement of some other operation cannot satisfy a delete.
+
+### Group membership is a delta, never a replace
+
+`modify(group, {"member": [...]})` is the wrong tool for a group, and the
+difference is a lost update. `modify` sends a `Change` with no operation, which
+the server applies as a replace of the whole attribute. Two administrators open
+the same group; the first reads the list, appends Marie and writes it back; the
+second, from the list read before Marie was added, appends Luc and writes it
+back. Marie is gone, and nothing anywhere reports it — the second write simply
+won. `member` is the attribute most likely to be edited by two people at once,
+on a domain where group membership is how permission is granted.
+
+`add_member` and `remove_member` send `Operation="add"` and
+`Operation="delete"` instead, which is what `Add-ADGroupMember` and
+`Remove-ADGroupMember` send and what `LdapAttrBuilder` maps to `FLAG_MOD_ADD`
+and `FLAG_MOD_DELETE`. The directory applies the change to the one value named,
+and two concurrent adds both land. `tests/test_member_request.py` asserts that
+the server reads from this client, entry for entry, what it reads from the
+cmdlet's recorded request.
+
+One member per call, on purpose: it is how the directory models the edit, and it
+is what lets a console mark one row busy while the others stay live.
+
+**A redundant call is a refusal, not a no-op.** Measured against a Samba 4.17
+directory, and there are three answers, not two:
+
+| Call | The directory answers | Reason text |
+|---|---|---|
+| add a member the group already has | `LDB_ERR_ENTRY_ALREADY_EXISTS` | *Attribute member already exists for target GUID …* |
+| remove a member the group never had | `LDB_ERR_NO_SUCH_ATTRIBUTE` | *No such attribute during LDB_MODIFY* |
+| remove a former member a second time | `LDB_ERR_UNWILLING_TO_PERFORM` | *Attribute member already deleted for target GUID …* |
+
+The third exists because a removal leaves a linked-attribute tombstone rather
+than nothing, so the directory remembers the member it no longer has. A console
+keying on one sentence for "not a member" would miss the other.
+
+`ModifyHandler` carries all three as `ModifyFailed`, so they arrive as an
+`ADWSClientError` with that code, the group as `.target`, and the directory's
+sentence as the message. The code alone cannot tell them from any other refused
+modify; the reason can. A caller that wants a no-op reads the membership first
+and asks only for the change, which is what the console's members dialog does.
+`tests/dc/test_membership_client.py` pins all three answers against a real
+directory.
 
 ### What a refusal is called
 

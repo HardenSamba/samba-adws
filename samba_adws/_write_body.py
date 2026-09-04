@@ -11,6 +11,13 @@ module's job into its own.
 document.** These are strings an administrator typed: an unescaped ampersand
 produces a request the server cannot parse, and an unescaped angle bracket
 produces one it parses differently from what was meant.
+
+**A Change names the operation the directory is to apply.** `replace` is what
+an ordinary modify means and what `ModifyHandler` falls back to when none is
+given. `add` and `delete` are deltas on a multi-valued attribute, which is the
+only safe way to edit `member`: `LdapAttrBuilder` maps them to `FLAG_MOD_ADD`
+and `FLAG_MOD_DELETE`, so two administrators adding two members at once both
+land, where two replaces would keep only the second list.
 """
 
 import html
@@ -29,12 +36,13 @@ def _qualified(name: str) -> str:
     return f"addata:{html.escape(name)}"
 
 
-# Renders one attribute as an AttributeTypeAndValue or a replace Change node.
+# Renders one attribute as an AttributeTypeAndValue or a Change node.
 #
 # `xsi:type="xsd:string"` is what a Windows client sends and what gives the
 # envelope's already-declared xsi/xsd namespaces a purpose;
 # `AttributeParser._read_values` reads the type to tell a string from base64.
-def _node(name: str, values: Sequence[str], change: bool) -> str:
+def _node(name: str, values: Sequence[str], change: bool,
+          operation: str = "replace") -> str:
     rendered = "".join(
         f'<ad:value xsi:type="xsd:string">{html.escape(value)}</ad:value>'
         for value in values
@@ -44,13 +52,16 @@ def _node(name: str, values: Sequence[str], change: bool) -> str:
         f'<da:AttributeValue>{rendered}</da:AttributeValue>'
     )
     if change:
-        return f'<da:Change Operation="replace">{inner}</da:Change>'
+        return f'<da:Change Operation="{html.escape(operation)}">{inner}</da:Change>'
     return f'<da:AttributeTypeAndValue>{inner}</da:AttributeTypeAndValue>'
 
 
 # Wraps attribute nodes in an AddRequest or a ModifyRequest body element.
-def request_body(entries: Mapping[str, Sequence[str]], change: bool) -> str:
-    nodes = "".join(_node(name, values, change) for name, values in entries.items())
+def request_body(entries: Mapping[str, Sequence[str]], change: bool,
+                 operation: str = "replace") -> str:
+    nodes = "".join(
+        _node(name, values, change, operation) for name, values in entries.items()
+    )
     if change:
         return f'<da:ModifyRequest>{nodes}</da:ModifyRequest>'
     return f'<da:AddRequest>{nodes}</da:AddRequest>'
