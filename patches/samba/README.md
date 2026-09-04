@@ -107,6 +107,66 @@ pipeline reports failure precisely when the symbol *is* there.
 Copy each to the same path on the controller, keep the originals — a copy of
 each is the whole rollback — and `systemctl restart samba-ad-dc`.
 
+On Debian 13 those three artefacts belong to three different binary packages,
+read out of the release's own `Contents-amd64` index rather than guessed:
+
+| Artefact | Debian binary package |
+|---|---|
+| `usr/lib/x86_64-linux-gnu/samba/ldb/rootdse.so` | `samba-dsdb-modules` |
+| `usr/lib/x86_64-linux-gnu/samba/libdsdb-module-private-samba.so.0` | `samba-libs` |
+| `usr/lib/x86_64-linux-gnu/samba/service/nbtd.so` | `samba` |
+
+### Installing it as packages, and why that means all of them
+
+Copying three files works and is what the recipe above does. It is also what
+makes the announcement fragile: the files belong to `dpkg`, `dpkg -V samba`
+reports them as modified from then on, and the next `apt upgrade` puts the
+stock ones back.
+
+The durable route is to rebuild the source package and install the result, so
+the patch lives inside a package `apt` understands. That route has a
+constraint which is not obvious and is not a matter of taste: **you cannot ship
+only the three packages above.** Debian's Samba binaries pin each other to an
+exact version, checked in trixie's `Packages` index:
+
+```
+samba              Depends: samba-libs (= 2:4.22.10+dfsg-0+deb13u1),
+                            samba-common-bin (= 2:4.22.10+dfsg-0+deb13u1)
+samba-dsdb-modules Depends: samba-libs (= 2:4.22.10+dfsg-0+deb13u1)
+samba-ad-dc        Depends: samba, python3-samba, samba-dsdb-modules,
+                            winbind, samba-libs — all (= <that version>)
+winbind            Depends: samba-libs, samba-common-bin, libwbclient0 — all (=)
+python3-samba      Depends: samba-libs (=)
+smbclient          Depends: samba-libs (=)
+libsmbclient0      Depends: samba-libs (=)
+```
+
+Bump three of them to a local version and leave the rest at the archive's, and
+`apt` is handed a dependency it cannot satisfy. So the source package is
+rebuilt whole and every binary it produces is offered at one version.
+
+`dpkg` decides which wins, and it is worth being precise about what that buys:
+
+```console
+$ dpkg --compare-versions '2:4.22.10+dfsg-0+deb13u2+hs1' gt '2:4.22.10+dfsg-0+deb13u2'; echo $?
+0
+$ dpkg --compare-versions '2:4.22.10+dfsg-0+deb13u3' gt '2:4.22.10+dfsg-0+deb13u2+hs1'; echo $?
+0
+```
+
+A local suffix outranks the archive version it was built from, so `apt`
+installs the patched build. It is outranked in turn by the next Debian
+revision, so a security update replaces it and the announcement stops. That is
+the right way round — a controller that refuses security updates to keep a
+feature is worse than one that loses the feature — but it means the pin has to
+move and the packages have to be rebuilt on every Samba update, and an operator
+who upgraded should re-run the check below.
+
+The HardenSamba appliance does all of this in its image build: `make samba`
+applies this patch through `debian/patches`, rebuilds the source, and refuses
+to finish if the built artefacts do not carry the parameter. See `src/build/samba.sh`
+and `docs/image.md` in `HardenSamba/hardensamba`.
+
 ## Checking that it worked
 
 Two measurements, one on each side. Both were taken on the appliance,
@@ -120,6 +180,32 @@ locator, which is the field the patch changes:
 |---|---|---|
 | absent | `0x000013fd` | not set |
 | `yes` | `0x000033fd` | set |
+
+The same `0x000033fd` was read on 4 September 2026 from a second controller,
+`samba.local`, running Debian 12 with Samba **4.17.12** and the three artefacts
+replaced by hand. Two Samba releases five apart, the same answer: the patch is
+not anchored to a version, and the value in that table is what to compare
+against rather than a number from one machine.
+
+Read it in Python, from the reply and never from the request:
+
+```python
+from samba.credentials import Credentials
+from samba.dcerpc import nbt
+from samba.net import Net
+from samba.param import LoadParm
+
+lp = LoadParm(); lp.load_default()
+creds = Credentials(); creds.guess(lp)
+reply = Net(creds=creds, lp=lp).finddc(address="127.0.0.1",
+                                       flags=nbt.NBT_SERVER_LDAP | nbt.NBT_SERVER_DS)
+print("0x%08x" % reply.server_type,
+      bool(reply.server_type & nbt.NBT_SERVER_ADS_WEB_SERVICE))
+```
+
+`Net(...)` needs `creds`; called without them it raises `TypeError: function
+missing required argument 'creds'`, which reads as a problem with the
+controller and is a problem with the call.
 
 **On a joined Windows client**, which is the only thing that proves the locator
 filter, because that filter runs there and not on the controller:
@@ -167,17 +253,27 @@ prompt unless the launcher sets `__COMPAT_LAYER=RunAsInvoker` first.
 
 ## Keeping it alive
 
-This patch is applied outside the Debian package, so an update of `samba`
-overwrites the libraries and the announcement silently stops, while the
-`smb.conf` line stays exactly where it was. **The presence of the line is not
-evidence that the announcement works.** Two things follow:
+Applied as loose files, this patch is applied outside the Debian package, so an
+update of `samba` overwrites the libraries and the announcement silently stops
+while the `smb.conf` line stays exactly where it was. Applied as a rebuilt
+package it survives longer, but not forever: the next Debian revision outranks
+the local suffix and `apt` takes it. **In neither case is the presence of the
+line evidence that the announcement works.** Three things follow:
 
-- pin or hold `samba`, or rebuild after every upgrade;
+- pin or hold `samba`, or rebuild after every upgrade. Holding a domain
+  controller's Samba back from a security update is a real cost; rebuilding is
+  the answer that does not trade one away;
 - re-derive the file list on every Samba release, not just the patch. The
   anchor has held so far, but the set of installed artefacts carrying the code
   has already changed once between 4.17 and 4.22, silently: copying the older
   list gives two files that exist and one that does not, and a controller that
-  still does not advertise.
+  still does not advertise;
+- check the controller, not the configuration. The one measurement that cannot
+  be fooled is `server_type` from its own netlogon reply, and the one that
+  proves the client half is `nltest /dsgetdc:<realm> /ws /force` from a joined
+  Windows machine. Both are above. An appliance built from
+  `HardenSamba/hardensamba` runs the first of them in `tests/appliance-check.sh`
+  on every run.
 
 `samdb_server_type()`, named in most write-ups on this subject, does not exist
 in Samba at all. Neither does the `0x00100000` those write-ups give as the

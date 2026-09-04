@@ -269,8 +269,10 @@ Get-ADUser -Filter "Department -eq 'QA'" | Set-ADUser -Description 'updated'
    `-Server`**, locate a controller with `DS_WEB_SERVICE_REQUIRED`, and stock Samba does not set the
    `DS_WS` flag in its CLDAP answer. Without [`patches/samba/`](patches/samba/README.md) applied and
    `adws:advertise = yes`, `nltest /dsgetdc:samba.local /ws` returns `1355` and ADAC cannot connect.
-   With them, both work (verified 4 September 2026, Samba 4.17.12 on Debian 12). Fallbacks without
-   the patch: ADUC (`dsa.msc`, LDAP) for the GUI, PowerShell `-Server` on the CLI. Details:
+   With them, both work (verified 4 September 2026, Samba 4.17.12 on Debian 12). The HardenSamba
+   appliance builds the patched Samba in its image (`make samba`), so a controller installed from
+   that image advertises without anyone doing this by hand. Fallbacks without the patch: ADUC
+   (`dsa.msc`, LDAP) for the GUI, PowerShell `-Server` on the CLI. Details:
    [06-depannage § 7](documentation/06-depannage.md#7-unable-to-find-a-default-server).
 2. **Self-service password change** (`Set-ADAccountPassword`, old → new):
    fails on the Samba side (`Failed to obtain remote address for the LDAP client`). Samba's
