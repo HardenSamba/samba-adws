@@ -5,8 +5,12 @@
 # the two together, so one cannot drift from the other quietly.
 __version__ = "1.0.0"
 
+from samba_adws._account import Account
 from samba_adws._search_base import is_guid_base
 from samba_adws._search_validation import SCOPES, SearchQuery, search_query
+from samba_adws._write_request import Placement
+from samba_adws.account_errors import AccountLeftDisabled
+from samba_adws.accounts import create_usable_account
 from samba_adws.client import ADWSClient
 from samba_adws.errors import ADWSClientError
 from samba_adws.membership_client import ADWSMembershipClient
@@ -19,6 +23,10 @@ __all__ = (
     "ADWSMembershipClient",
     "ADWSSearchClient",
     "ADWSWriteClient",
+    "Account",
+    "AccountLeftDisabled",
+    "Placement",
+    "create_usable_account",
     "SCOPES",
     "SearchQuery",
     "is_guid_base",

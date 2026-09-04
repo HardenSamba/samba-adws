@@ -401,10 +401,46 @@ inert. Enabling first and setting the password second leaves, on a failure at
 step two, an enabled account with no password — which is the kind of half-made
 thing nobody finds until it is used.
 
-The orchestration of those three calls is deliberately **not** in this package:
-it is policy above the protocol boundary, it needs a caller-supplied relative
-name, and it belongs to its own ticket. The ordering is written here so the
-knowledge survives that separation.
+The orchestration of those three calls is `accounts.create_usable_account`,
+which holds the order so the knowledge is enforced rather than remembered:
+
+```python
+from samba_adws import ADWSWriteClient, AccountLeftDisabled, Placement, create_usable_account
+
+client = ADWSWriteClient("dc1.samdom.example.com")
+try:
+    account = create_usable_account(
+        client, Placement("CN=demo", parent),
+        {"objectClass": ["user"], "sAMAccountName": ["demo"]}, secret)
+except AccountLeftDisabled as left:
+    # The object exists, disabled. left.account.reached says how far it got:
+    # "created" (no password yet) or "password-set" (the enable was refused).
+    ...
+# account.dn, account.guid, account.reached == "usable"
+```
+
+`userAccountControl` is the sequence's to set at both ends — `546` going in,
+`512` coming out — and a caller that supplies it is refused before anything is
+sent, rather than overridden in silence. The password is checked before the
+create for the same reason: a refusal after it would leave an account behind
+for an input that could have been refused up front. A refusal *by the
+directory* after the create — a password its policy rejects, an enable it will
+not perform — raises `AccountLeftDisabled`, which carries the server's code and
+reason unchanged, names the object as `.target`, and says in `.account.reached`
+which step succeeded last. That is what lets a retry start from the password
+rather than create a second object beside the first.
+
+The relative name stays the caller's, verbatim, which is why `Placement` is the
+same pair `create` takes. The `dn` above is composed in `accounts.py` — the one
+place this package puts two halves back together — and the claim that survives
+is the one that matters: it is a caller re-joining the two strings it passed,
+not this package deciding how a directory spells a name.
+
+`tests/test_accounts.py` reads the order off the recorded traffic with the
+server's own parsers and checks both control values bit by bit against
+constants written in the test. `tests/dc/test_accounts.py` asks a real
+directory the two questions no script can answer: that a good password ends
+with an enabled account, and that a refused one leaves a disabled one.
 
 ### An empty response body is a success
 

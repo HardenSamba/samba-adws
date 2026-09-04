@@ -15,8 +15,9 @@ caller to reach it.
 directory refuses to enable an account that has no password, and enabling before
 setting one would leave an enabled account without a password if the second call
 failed. Doing it in that order means a failure anywhere leaves a disabled
-object, which is the safe half-made thing. See `documentation/07-linux-client.md`
-for the recipe; the orchestration itself belongs above this boundary.
+object, which is the safe half-made thing. `accounts.create_usable_account`
+holds that order; this class holds one exchange per method and nothing about
+which comes first.
 
 **Nothing here holds a password.** It reaches `set_password`, goes into one
 document, and is not stored, logged or returned. Faults are re-raised with the
