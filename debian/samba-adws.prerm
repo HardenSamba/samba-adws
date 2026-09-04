@@ -1,0 +1,18 @@
+#!/bin/sh
+# Stops the service before its files go. debhelper's own snippet does this
+# for a removal; it is written out as well so that a reader of this file sees
+# what happens, and so that it still happens if that snippet ever changes.
+# deb-systemd-invoke honours policy-rc.d, which systemctl does not.
+set -e
+
+case "$1" in
+    remove)
+        if [ -d /run/systemd/system ]; then
+            deb-systemd-invoke stop samba-adws.service >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

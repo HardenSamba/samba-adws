@@ -20,7 +20,7 @@
   `python3-samba` provides `samba`+`ldb`, `python3-gssapi` provides `gssapi`,
   `samba-common-bin` provides `samba-tool`. The server has **no** pip
   dependency: never run `pip install samba`/`ldb`, and never use `--break-system-packages`.
-  The `install.sh` script (§3) installs these packages for you.
+  The package (§3) or the `install.sh` script (§4) installs these packages for you.
 
 ### Client side (Windows)
 
@@ -92,33 +92,68 @@ sudo samba-tool spn add "host/$(hostname -f)" "$(hostname -s)$"
 sudo samba-tool spn add "HOST/$(hostname -f)" "$(hostname -s)$"
 ```
 
-## 3. One-command installation (recommended)
+## 3. The Debian package (recommended)
+
+The repository carries its own `debian/`, so the service installs the way
+anything else on a Debian controller does, and `apt` resolves the dependencies.
 
 ```bash
-cd /root
-git clone <url-du-depot> SambaAD_ADWS
-cd SambaAD_ADWS
-sudo tools/installation/install.sh
+git clone https://github.com/HardenSamba/samba-adws.git
+cd samba-adws
+dpkg-buildpackage -us -uc -b          # needs debhelper and dh-python
+sudo apt install ../samba-adws_*.deb
 ```
 
-`install.sh` is **idempotent** and **sovereign** (readable bash, no binaries).
-It chains together everything this document used to describe doing by hand:
+What the package installs, and where — checked against `MODULE.yaml` field by
+field by `tests/test_packaging.py`, because the two files drift and the drift
+is invisible until a machine installs the package:
 
-1. installs the system packages (§1), with no `pip` and no virtualenv;
-2. registers the `host/<fqdn>` SPN on the machine account of the DC if it is missing;
-3. writes `/etc/default/samba-adws` (host/port/log, read by the service);
-4. renders and installs the systemd unit from `tools/installation/samba-adws.service`
-   (`WorkingDirectory` = the cloned directory);
-5. starts the service (`enable --now`) and opens `9389/tcp` in ufw.
+| What | Where |
+|---|---|
+| the service and the client | `/usr/share/samba-adws/` (a payload, not the Python path: the tree is two sibling top-level packages, `src` and `classes`, and neither name may be claimed in a shared `site-packages`) |
+| the unit | `/lib/systemd/system/samba-adws.service` |
+| the command | `/usr/bin/samba-adws` — `run`, `check`, `--version`, and every client verb (`naming-context`, `search`, `status`) |
+| the configuration | `/etc/hardensamba/samba-adws/samba-adws.conf`, a conffile (§3.1) |
+| the log | `/var/log/samba-adws/adws.log`, in a directory systemd creates |
 
-To uninstall: `sudo tools/installation/install.sh --uninstall` (keeps the logs, leaves the SPN
-in AD). To reconfigure: edit `/etc/default/samba-adws`, then run
-`sudo systemctl restart samba-adws`.
+**Whether the service starts depends on one fact.** The package installs the
+unit but does not enable it blindly. `postinst` enables and starts it only if
+`/var/lib/samba/private/sam.ldb` exists — a provisioned directory. On a
+controller that has not been provisioned yet it says so on standard error and
+leaves the unit disabled; enable it after provisioning:
 
-### 3.1 The environment file
+```bash
+sudo systemctl enable --now samba-adws
+```
 
-`/etc/default/samba-adws` holds every setting the service reads. A change takes
-effect on `systemctl restart samba-adws`, not before.
+**The SPN is the one manual step.** A maintainer script cannot assume the
+directory is up, or that it may write to it, so the package does not register
+`host/<fqdn>` on the machine account. Do it once (§2, *Register the required
+SPNs*); the from-checkout installer below does it for you.
+
+**Upgrading from the installer.** An installation made with `install.sh` wrote
+`/etc/default/samba-adws` and a unit under `/etc/systemd/system/`. The
+package's unit still reads that file, so the settings survive — but a unit in
+`/etc/systemd/system/` shadows the package's. Remove the old one first:
+
+```bash
+sudo tools/installation/install.sh --uninstall     # removes the old unit and /etc/default/samba-adws
+sudo apt install ../samba-adws_*.deb
+```
+
+Removing the package (`apt remove`) stops and removes the service and the
+command; purging it (`apt purge`) also removes the conffile. The logs are kept
+either way, and the SPN is left in the directory: it belongs to the domain.
+
+### 3.1 The configuration file
+
+`/etc/hardensamba/samba-adws/samba-adws.conf` — the package's conffile, the
+path `MODULE.yaml` declares — holds every setting the service reads. The
+installer script writes the same variables to `/etc/default/samba-adws`
+instead, and the unit reads that file first if it exists, so an installation
+that came from the script keeps its settings; where both name a variable, the
+conffile wins. A change takes effect on `systemctl restart samba-adws`, not
+before.
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -143,7 +178,30 @@ is refused, and read
 [Troubleshooting § 10](06-depannage.md#10-a-connection-is-closed-on-the-announced-size)
 first.
 
-## 4. Manual start (debug): under the hood
+## 4. From a checkout: the installer script
+
+```bash
+cd /root
+git clone <url-du-depot> SambaAD_ADWS
+cd SambaAD_ADWS
+sudo tools/installation/install.sh
+```
+
+`install.sh` is **idempotent** and **sovereign** (readable bash, no binaries).
+It chains together everything this document used to describe doing by hand:
+
+1. installs the system packages (§1), with no `pip` and no virtualenv;
+2. registers the `host/<fqdn>` SPN on the machine account of the DC if it is missing;
+3. writes `/etc/default/samba-adws` (host/port/log, read by the service);
+4. renders and installs the systemd unit from `tools/installation/samba-adws.service`
+   (`WorkingDirectory` = the cloned directory);
+5. starts the service (`enable --now`) and opens `9389/tcp` in ufw.
+
+To uninstall: `sudo tools/installation/install.sh --uninstall` (keeps the logs, leaves the SPN
+in AD). To reconfigure: edit `/etc/default/samba-adws`, then run
+`sudo systemctl restart samba-adws`.
+
+## 5. Manual start (debug): under the hood
 
 `install.sh` is nothing more than the automation of the following; to start the
 server by hand during development:
@@ -177,7 +235,7 @@ Live logs:
 sudo journalctl -u samba-adws -f
 ```
 
-## 5. Verification
+## 6. Verification
 
 ### From the DC
 
@@ -205,10 +263,18 @@ See [05-tests.md](05-tests.md) for `Test-ADWS-Sovereign.ps1`, which covers reads
 ## No virtualenv, no pip
 
 The server has **no pip dependency**: all runtime dependencies are system
-packages (`python3-samba`, `python3-gssapi`) installed by `install.sh` (§3). There is no need to
+packages (`python3-samba`, `python3-gssapi`) installed by the package (§3) or by `install.sh` (§4). There is no need to
 create a virtualenv or to use `pip --break-system-packages`.
 
 ## Uninstallation
+
+Installed from the package:
+
+```bash
+sudo apt purge samba-adws             # stops and removes the service, the command and the conffile; keeps the logs
+```
+
+Installed from a checkout with the script:
 
 ```bash
 sudo tools/installation/install.sh --uninstall        # stops and removes the service (keeps the logs, leaves the SPN)

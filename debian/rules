@@ -1,0 +1,65 @@
+#!/usr/bin/make -f
+# Builds the samba-adws package. See debian/control for what it installs and
+# why the code lives under /usr/share rather than in the Python path.
+#
+# No pybuild, no setup.py: the tree is two sibling top-level packages, src and
+# classes, plus samba_adws, and it runs in place. dh_python3 is pointed at the
+# payload directory so the files are byte-compiled by py3compile at install
+# time and cleaned at removal, the way a private Python directory is meant to
+# be handled, rather than compiled at first run by root into /usr/share.
+#
+# The test suite is not run at build time. Its level-0 half needs
+# python3-gssapi, which a build machine has no reason to carry, and its
+# directory half needs a provisioned controller. documentation/05-tests.md
+# says how to run both where they can run.
+
+export DH_VERBOSE = 1
+
+PAYLOAD = debian/samba-adws/usr/share/samba-adws
+
+%:
+	dh $@ --with python3
+
+override_dh_auto_build:
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d $(PAYLOAD)
+	cp -a src classes samba_adws MODULE.yaml $(PAYLOAD)/
+	install -d $(PAYLOAD)/tools/test
+	install -m 0644 tools/test/test_adws.py $(PAYLOAD)/tools/test/test_adws.py
+	find $(PAYLOAD) -name __pycache__ -prune -exec rm -rf {} +
+	find $(PAYLOAD) -name '*.pyc' -delete
+	# Library modules, not scripts: none of them is run by name, and the three
+	# vendored files under src/ still carry a python2 shebang from 2016 that
+	# lintian reads as a dependency on an interpreter this package does not
+	# and cannot declare. Normalised in the package only; the tree keeps its
+	# bytes, the way modules.sh in the appliance strips carriage returns.
+	find $(PAYLOAD) -type f -name '*.py' -exec chmod 0644 {} +
+	find $(PAYLOAD) -type f -name '*.py' \
+	    -exec sed -i '1s|^\#!.*python2.*$$|\#!/usr/bin/python3|' {} +
+	install -D -m 0755 debian/samba-adws.wrapper debian/samba-adws/usr/bin/samba-adws
+	install -D -m 0644 debian/samba-adws.conf \
+	    debian/samba-adws/etc/hardensamba/samba-adws/samba-adws.conf
+	# The one thing that does go on the Python path: a package named
+	# samba_adws whose __init__ points at the payload. It is what makes
+	# "import samba_adws" work for a consumer in another process without the
+	# payload's top-level names src and classes being claimed globally.
+	install -D -m 0644 debian/samba-adws.shim.py \
+	    debian/samba-adws/usr/lib/python3/dist-packages/samba_adws/__init__.py
+
+override_dh_python3:
+	dh_python3 /usr/share/samba-adws
+
+# Installed, not enabled and not started. Whether the service can run depends
+# on a provisioned directory existing, which postinst checks for; see there.
+#
+# --no-stop-on-upgrade as well, and it is load-bearing. Without it debhelper's
+# prerm stops the service on an upgrade while --no-start keeps its postinst
+# from starting it again, and postinst's own try-restart then finds nothing
+# running: every upgrade left the controller without ADWS. With it, a running
+# service is restarted onto the new code and one the operator stopped stays
+# stopped, which is the only pair of outcomes that respects both.
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start --no-stop-on-upgrade

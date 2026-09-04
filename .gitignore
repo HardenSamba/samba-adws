@@ -104,3 +104,13 @@ Session.vim
 *~
 # auto-generated tag files
 tags
+### Debian packaging build products (debian/ itself is tracked)
+debian/samba-adws/
+debian/.debhelper/
+debian/files
+debian/*.substvars
+debian/*.debhelper
+debian/debhelper-build-stamp
+*.deb
+*.buildinfo
+*.changes

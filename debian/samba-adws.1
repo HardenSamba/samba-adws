@@ -1,0 +1,74 @@
+.TH SAMBA-ADWS 1 "September 2026" "samba-adws 1.0.0" "HardenSamba"
+.SH NAME
+samba-adws \- Active Directory Web Services for Samba: run, check, or query the service
+.SH SYNOPSIS
+.B samba-adws run
+.br
+.B samba-adws check
+.br
+.B samba-adws \-\-version
+.br
+.BI "samba-adws naming-context \-\-server " controller
+.br
+.BI "samba-adws search \-\-server " controller " \-\-base " dn " [" options "]"
+.br
+.B samba-adws status
+.SH DESCRIPTION
+.B samba-adws
+is the command the samba-adws module declares. The service itself is
+.BR samba-adws.service ,
+which listens on tcp/9389 and answers the WS-* protocols the ActiveDirectory
+PowerShell module, the Active Directory Administrative Center and the rest of
+RSAT speak. This command is the way an operator runs that service in the
+foreground, checks the installation, or reads the directory from Linux.
+.SH VERBS
+.TP
+.B run
+Runs the service in the foreground, reading the same configuration files the
+unit reads. Useful when systemd has reported a failure and not its cause.
+.TP
+.B check
+Checks the installation: Python imports, the local directory, and the handler
+routing. Prints one line per check and a summary.
+.TP
+.B \-\-version
+Prints the module version from MODULE.yaml.
+.TP
+.BI "naming-context \-\-server " controller
+Prints, as JSON, the default naming context the controller publishes, which is
+where a caller starts before it holds any distinguished name.
+.TP
+.BI "search \-\-server " controller " \-\-base " dn
+Prints one page of the objects under a container, as JSON. See
+.B samba-adws search \-\-help
+for the scope, filter, property and page-size options.
+.TP
+.B status
+Prints, as JSON, the module name, its version and the verbs it answers. Opens
+no connection; a consumer uses it to ask whether this command answers at all.
+.SH FILES
+.TP
+.I /etc/hardensamba/samba-adws/samba-adws.conf
+The service's configuration, a conffile: the address and port, the log file
+and level, and the message-size ceiling.
+.TP
+.I /etc/default/samba-adws
+Read first if present, for an installation that came from the from-checkout
+installer; the conffile above wins where both name a variable.
+.TP
+.I /usr/share/samba-adws
+The service and the client, installed as a payload rather than into the
+Python path.
+.TP
+.I /var/log/samba-adws/adws.log
+The service's log, in a directory systemd creates for it.
+.SH AUTHENTICATION
+The client verbs authenticate with Kerberos from the current ticket cache; run
+.B kinit
+first. Every request runs on the controller as the principal that
+authenticated it.
+.SH SEE ALSO
+.BR samba-tool (8),
+.BR systemctl (1),
+and the documentation under
+.IR /usr/share/doc/samba-adws/documentation/ .

@@ -1,0 +1,44 @@
+#!/bin/sh
+# Enables and starts the service where it can run, and only there.
+#
+# The unit is installed by debhelper with --no-enable --no-start, because
+# whether the service can run at all depends on a provisioned directory: it
+# opens /var/lib/samba/private/sam.ldb and needs a host service principal
+# name, and starting it before either exists produces a failed unit whose
+# journal points at Samba. So the decision is taken here, from the one fact
+# that settles it, and nothing below may fail the installation: a controller
+# without a domain yet is a normal state, not an error.
+#
+# deb-systemd-helper and deb-systemd-invoke rather than systemctl. The helper
+# remembers that it was this package that enabled the unit, and does not
+# enable it again on an upgrade after an operator disabled it; the invoker
+# honours policy-rc.d, which is what keeps this from starting a domain
+# controller inside the chroot an image is built in.
+#
+# The SPN is deliberately not registered here. A maintainer script cannot
+# assume the directory is up or that it may write to it; the step is
+# documented in /usr/share/doc/samba-adws/documentation/02-installation.md.
+set -e
+
+#DEBHELPER#
+
+case "$1" in
+    configure)
+        if [ -d /run/systemd/system ] && [ -f /var/lib/samba/private/sam.ldb ]; then
+            deb-systemd-helper enable samba-adws.service >/dev/null 2>&1 || true
+            if [ -n "${2:-}" ]; then
+                # An upgrade: pick up the new code if it is running, leave it
+                # stopped if the operator stopped it.
+                deb-systemd-invoke try-restart samba-adws.service >/dev/null 2>&1 || true
+            else
+                deb-systemd-invoke start samba-adws.service >/dev/null 2>&1 || true
+            fi
+        elif [ ! -f /var/lib/samba/private/sam.ldb ]; then
+            echo "samba-adws: no provisioned directory at /var/lib/samba/private/sam.ldb;" >&2
+            echo "samba-adws: the service is installed and left disabled. After provisioning:" >&2
+            echo "samba-adws:     systemctl enable --now samba-adws" >&2
+        fi
+        ;;
+esac
+
+exit 0

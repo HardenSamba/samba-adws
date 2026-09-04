@@ -1,0 +1,55 @@
+#!/bin/sh
+# The samba-adws command MODULE.yaml declares.
+#
+# Two things have wanted this name. Issue 6 asked for a command that does what
+# "python3 -m src.main" does, so an operator can run the service in the
+# foreground when systemd has said it failed and not why; that is "run". The
+# supported Linux client, which arrived later, is what another module reaches
+# this one through, as a subprocess; every other verb goes to it. The
+# HardenSamba appliance shipped this same split before the module did, and a
+# consumer written against it keeps working.
+set -eu
+
+PAYLOAD=/usr/share/samba-adws
+
+usage() {
+    cat <<'EOF'
+usage: samba-adws run              run the service in the foreground
+       samba-adws check            check the installation (imports, directory, routing)
+       samba-adws --version
+       samba-adws <verb> [...]     the Linux client: naming-context, search, status
+                                   (samba-adws <verb> --help for each)
+EOF
+}
+
+case "${1:-}" in
+    run)
+        # The same two files the unit reads, in the same order: the file the
+        # from-checkout installer wrote, then this package's own conffile,
+        # which wins where both name a variable.
+        set -a
+        [ -r /etc/default/samba-adws ] && . /etc/default/samba-adws
+        [ -r /etc/hardensamba/samba-adws/samba-adws.conf ] && \
+            . /etc/hardensamba/samba-adws/samba-adws.conf
+        set +a
+        cd "$PAYLOAD"
+        exec /usr/bin/python3 -m src.main
+        ;;
+    check)
+        cd "$PAYLOAD"
+        exec /usr/bin/python3 tools/test/test_adws.py
+        ;;
+    --version|-v)
+        printf 'samba-adws %s\n' "$(sed -n 's/^version: *//p' "$PAYLOAD/MODULE.yaml")"
+        ;;
+    ""|--help|-h)
+        usage
+        ;;
+    *)
+        # "-m samba_adws", not "-m samba_adws.cli": the entry point is
+        # __main__.py, which exists for exactly this kind of checkout with no
+        # install. cli.py has no __main__ block; naming it runs nothing.
+        cd "$PAYLOAD"
+        exec /usr/bin/python3 -m samba_adws "$@"
+        ;;
+esac

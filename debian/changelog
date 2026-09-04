@@ -1,0 +1,10 @@
+samba-adws (1.0.0) unstable; urgency=medium
+
+  * First Debian packaging (samba-adws#6). Installs the service as a payload
+    under /usr/share/samba-adws with a systemd unit, the samba-adws command
+    MODULE.yaml has declared since it was written, and the configuration
+    under /etc/hardensamba/samba-adws/ as a conffile. Replaces the
+    from-checkout installer as the documented path; that script remains for
+    a source install.
+
+ -- HardenSamba <hardensamba@users.noreply.github.com>  Fri, 04 Sep 2026 12:00:00 +0000

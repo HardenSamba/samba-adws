@@ -1,0 +1,42 @@
+[Unit]
+Description=Samba AD - Active Directory Web Services (ADWS, port 9389/tcp)
+Documentation=https://github.com/HardenSamba/samba-adws
+After=samba-ad-dc.service network-online.target
+Wants=network-online.target
+Requires=samba-ad-dc.service
+# Nothing to serve without a directory, and a start that fails here blames
+# Samba rather than the missing domain.
+ConditionPathExists=/var/lib/samba/private/sam.ldb
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/usr/share/samba-adws
+Environment=PYTHONPATH=/usr/share/samba-adws
+# The from-checkout installer wrote /etc/default/samba-adws; it is still read
+# so an upgrade from that install keeps its settings. The conffile this
+# package owns is read second and wins where both name a variable.
+EnvironmentFile=-/etc/default/samba-adws
+EnvironmentFile=-/etc/hardensamba/samba-adws/samba-adws.conf
+ExecStart=/usr/bin/python3 -m src.main
+Restart=on-failure
+RestartSec=5
+LogsDirectory=samba-adws
+LogsDirectoryMode=0750
+
+# The directory session is opened on the local database, so the service cannot
+# be confined the way a network daemon usually is: it needs /var/lib/samba
+# writable and the machine account readable. These are the restrictions that
+# hold without breaking it, verified on a provisioned controller; ProtectSystem
+# beyond full does not.
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=full
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target

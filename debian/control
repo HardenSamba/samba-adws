@@ -1,0 +1,40 @@
+Source: samba-adws
+Section: net
+Priority: optional
+Maintainer: HardenSamba <hardensamba@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), dh-python, python3
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/HardenSamba/samba-adws
+Vcs-Git: https://github.com/HardenSamba/samba-adws.git
+Vcs-Browser: https://github.com/HardenSamba/samba-adws
+
+Package: samba-adws
+Architecture: all
+Depends: ${misc:Depends}, ${python3:Depends},
+ python3-samba,
+ python3-gssapi,
+ samba-common-bin
+Recommends: krb5-user
+Description: Active Directory Web Services for Samba (TCP 9389)
+ The endpoint Windows administration tooling expects on a domain controller.
+ With it the ActiveDirectory PowerShell module, the Active Directory
+ Administrative Center and the rest of RSAT manage a Samba domain the way
+ they manage a Windows one, over the WS-* protocols on tcp/9389.
+ .
+ A pure-Python implementation with no Microsoft component: .NET Message
+ Framing, GSSAPI/SPNEGO through samba.gensec, WCF binary XML, SOAP 1.2 with
+ WS-Addressing, and WS-Transfer, WS-Enumeration and the IMDA data model on
+ top. Every request runs as the principal that authenticated it.
+ .
+ The code is installed as a payload under /usr/share/samba-adws rather than
+ into the Python path: it is two sibling top-level packages named src and
+ classes, and neither name may be claimed in a shared site-packages. The
+ samba-adws command runs the service in the foreground, checks the
+ installation, or drives the supported Linux client.
+ .
+ The unit is installed and enabled and started only where a provisioned
+ directory already exists. On a controller that has not been provisioned it
+ is left disabled: the service needs a directory and a host service
+ principal name, and starting it before either exists fails in a way that
+ points at Samba rather than at the missing domain.

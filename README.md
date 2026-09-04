@@ -65,7 +65,25 @@ local `SamDB`, opened **lazily and per process** (the server is a `ForkingTCPSer
 
 ## Installing on the Samba DC
 
-Since the repository is **already cloned on the Samba domain controller** (Debian/Ubuntu),
+**As a Debian package**, which is the documented path: the repository carries
+its own `debian/`, `apt` resolves the dependencies, and the result installs,
+upgrades and removes like anything else on the controller.
+
+```bash
+git clone https://github.com/HardenSamba/samba-adws.git && cd samba-adws
+dpkg-buildpackage -us -uc -b
+sudo apt install ../samba-adws_*.deb
+```
+
+It installs the service under `/usr/share/samba-adws`, the `samba-adws` command,
+the unit, and its configuration at `/etc/hardensamba/samba-adws/samba-adws.conf`.
+The service is enabled and started only where a provisioned directory already
+exists; register the `host/<fqdn>` SPN once (§ Kerberos in
+[02-installation.md](documentation/02-installation.md)). Details, and how to
+move an installation made by the script below onto the package:
+[02-installation.md § 3](documentation/02-installation.md#3-the-debian-package-recommended).
+
+**From a checkout**, when the repository is already cloned on the controller,
 everything installs and starts with **a single command**, as `root`:
 
 ```bash
@@ -73,7 +91,7 @@ cd SambaAD_ADWS        # the cloned directory
 sudo tools/installation/install.sh
 ```
 
-That is all. `install.sh` is idempotent and sovereign (readable bash, no binary): it
+`install.sh` is idempotent and sovereign (readable bash, no binary): it
 installs the system packages through **apt** (**no `pip`, no virtualenv,
 no `--break-system-packages`**), registers the `host/<fqdn>` SPN if it is missing, writes the
 `/etc/default/samba-adws` configuration, installs and starts the systemd service (rendered from

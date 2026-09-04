@@ -1,0 +1,19 @@
+#!/bin/sh
+# After removal. The logs are kept on purpose, on remove and on purge alike:
+# they are the record of what the service did, and the from-checkout
+# installer's --uninstall kept them too. The host SPN registered in the
+# directory is also left in place; it belongs to the domain, not to this
+# package, and removing it would have to assume the directory is reachable.
+set -e
+
+case "$1" in
+    purge)
+        # dpkg removes the conffile; the directory it lived in is ours.
+        rmdir --ignore-fail-on-non-empty /etc/hardensamba/samba-adws 2>/dev/null || true
+        rmdir --ignore-fail-on-non-empty /etc/hardensamba 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
