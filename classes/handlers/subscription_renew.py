@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 
-from classes.parsing.context import RequestContext
-from src.soap.namespaces import WSEV
 from src.enumeration.subscription_id import extract_identifier, parse_expires
 from src.enumeration.subscription_registry import get_subscription_cache
+from src.soap.namespaces import WSEV
+
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
 
 
 class SubscriptionRenewHandler(BaseHandler):

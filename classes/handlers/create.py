@@ -4,12 +4,12 @@ import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 import ldb
+from src.soap.namespaces import WST
 
+from classes.directory.ldap_attr_builder import LdapAttrBuilder
+from classes.handlers.base import BaseHandler
 from classes.parsing.body_parser import BodyParser
 from classes.parsing.context import RequestContext
-from classes.directory.ldap_attr_builder import LdapAttrBuilder
-from src.soap.namespaces import WST
-from classes.handlers.base import BaseHandler
 
 
 # Handles the WS-Transfer Create action: adds the object, returns its EPR reply.

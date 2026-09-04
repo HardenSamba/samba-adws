@@ -1,10 +1,10 @@
 from typing import Any, Optional
 
-from classes.parsing.context import RequestContext
 from classes.handlers.base import BaseHandler
 from classes.handlers.create import CreateHandler
 from classes.handlers.delete import DeleteHandler
 from classes.handlers.modify import ModifyHandler
+from classes.parsing.context import RequestContext
 
 
 class CRUDHandler(BaseHandler):

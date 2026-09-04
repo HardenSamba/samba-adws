@@ -1,11 +1,11 @@
 from typing import Any, Tuple, cast
 
 import ldb
+from src.soap.namespaces import CUSTOM_ACTIONS
 
+from classes.handlers.base import BaseHandler
 from classes.parsing.body_parser import BodyParser
 from classes.parsing.context import RequestContext
-from src.soap.namespaces import CUSTOM_ACTIONS
-from classes.handlers.base import BaseHandler
 
 ENABLED_FEATURE_ATTR = "msDS-EnabledFeature"
 

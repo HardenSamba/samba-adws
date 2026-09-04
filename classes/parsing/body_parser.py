@@ -1,8 +1,9 @@
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
 
-from classes.parsing.attribute_parser import AttributeParser
 from src.soap.namespaces import AD, ADDATA, CUSTOM_ACTIONS, DA
+
+from classes.parsing.attribute_parser import AttributeParser
 
 NS = {
     "s": "http://www.w3.org/2003/05/soap-envelope",

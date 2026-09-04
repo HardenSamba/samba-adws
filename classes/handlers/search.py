@@ -1,9 +1,9 @@
 from typing import Any, Optional
 
-from classes.parsing.context import RequestContext
-from classes.parsing.filter_parser import FilterParser
 from classes.handlers.base import BaseHandler
 from classes.handlers.enumerate import EnumerateHandler
+from classes.parsing.context import RequestContext
+from classes.parsing.filter_parser import FilterParser
 
 
 class SearchHandler(BaseHandler):

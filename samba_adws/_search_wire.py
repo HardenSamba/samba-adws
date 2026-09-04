@@ -10,8 +10,9 @@ working and not working against a real one.
 
 import html
 
-from samba_adws._request import RESOURCE_PATH, endpoint_for
 from src.soap.namespaces import AD, ADDATA, ADLQ, SOAP_ENV, WSA, WSEN, XSD, XSI
+
+from samba_adws._request import RESOURCE_PATH, endpoint_for
 
 ENUMERATION_PATH = "/ActiveDirectoryWebServices/Windows/Enumeration"
 

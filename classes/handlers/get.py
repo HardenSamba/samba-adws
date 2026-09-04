@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 
 import ldb
 
-from classes.parsing.context import RequestContext
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
 
 # RootDSE attributes Samba returns that real AD does NOT expose. The Windows
 # AD client looks attribute names up in its hardcoded RootDSE syntax table

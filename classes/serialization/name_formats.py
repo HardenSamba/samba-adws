@@ -2,7 +2,6 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import ldb
-
 from src.serialization.name_filters import filter_for_offered, first_text
 from src.serialization.name_renderers import render_canonical, render_dn, render_guid, render_nt4
 

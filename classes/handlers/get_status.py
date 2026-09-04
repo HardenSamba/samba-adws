@@ -1,7 +1,8 @@
-from classes.parsing.context import RequestContext
 from src.enumeration.enumeration import get_enumeration_registry
 from src.soap.namespaces import WSEN
+
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
 
 
 class GetStatusHandler(BaseHandler):

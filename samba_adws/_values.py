@@ -5,8 +5,9 @@ import binascii
 import xml.etree.ElementTree as ET
 from typing import Dict, Iterable, Tuple
 
-from samba_adws.errors import ADWSClientError
 from src.soap.namespaces import AD, XSI
+
+from samba_adws.errors import ADWSClientError
 
 
 # Converts every AD attribute in a SOAP body into a mapping entry.

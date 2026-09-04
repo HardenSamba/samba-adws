@@ -2,6 +2,7 @@
 """SambaAD ADWS server entry point (run with: python3 -m src.main)."""
 from classes.server.config import Config
 from classes.server.server import ADWSServer
+
 from src.nettcp import nmf
 
 

@@ -17,9 +17,10 @@ import html
 import uuid
 from typing import Tuple
 
+from src.soap.namespaces import ADLQ, WSEN
+
 from samba_adws._search_validation import SearchQuery
 from samba_adws._search_wire import enumeration_endpoint, envelope
-from src.soap.namespaces import ADLQ, WSEN
 
 ENUMERATE_ACTION = f"{WSEN}/Enumerate"
 ENUMERATE_RESPONSE_ACTION = f"{ENUMERATE_ACTION}Response"

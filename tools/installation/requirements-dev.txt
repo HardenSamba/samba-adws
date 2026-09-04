@@ -2,7 +2,12 @@
 # Install with: pip3 install -r requirements-dev.txt
 # Then: pre-commit install
 
-ruff>=0.8
+# The floor is the pre-commit pin, not "any ruff". pyproject.toml names rules
+# by selector, and a selector the installed ruff does not know is a TOML parse
+# error: the linter aborts before reading a file and exits non-zero exactly as
+# it would on a finding. A ruff older than this floor is one that cannot start
+# on this configuration (#29).
+ruff>=0.16
 flake8>=7.0
 flake8-functions>=0.0.8
 pylint>=3.0

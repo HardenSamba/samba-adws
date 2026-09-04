@@ -1,10 +1,11 @@
 from typing import Any, cast
 
-from classes.parsing.context import RequestContext
-from classes.directory.domain_loader import DomainLoader
-from classes.serialization.domain_serializer import DomainSerializer
 from src.soap.namespaces import CUSTOM_ACTIONS
+
+from classes.directory.domain_loader import DomainLoader
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
+from classes.serialization.domain_serializer import DomainSerializer
 
 
 class GetADDomainHandler(BaseHandler):

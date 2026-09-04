@@ -2,12 +2,12 @@ import socket
 from typing import Any, Dict, List, cast
 
 import ldb
+from src.soap.namespaces import CUSTOM_ACTIONS
 
+from classes.handlers.base import BaseHandler
 from classes.parsing.context import RequestContext
 from classes.serialization.dc_serializer import DomainControllerSerializer
 from classes.serialization.ldb_value import LdbValue
-from src.soap.namespaces import CUSTOM_ACTIONS
-from classes.handlers.base import BaseHandler
 
 _EMPTY_GUID = "00000000-0000-0000-0000-000000000000"
 _DC_ATTRS = ["distinguishedName", "objectGUID", "invocationId"]

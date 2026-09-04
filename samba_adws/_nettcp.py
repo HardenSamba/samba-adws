@@ -3,9 +3,10 @@
 import socket
 from typing import Any
 
-from samba_adws._request import endpoint_for
 from src.nettcp.stream.nmf import NMFStream
 from src.nettcp.stream.socket import SocketStream
+
+from samba_adws._request import endpoint_for
 
 
 # Runs an authenticated NMF session against the ADWS Resource endpoint.

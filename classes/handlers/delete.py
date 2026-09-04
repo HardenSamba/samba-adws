@@ -1,10 +1,10 @@
 from typing import List
 
 import ldb
-
-from classes.parsing.context import RequestContext
 from src.soap.namespaces import WST
+
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
 
 # LDAP_SERVER_TREE_DELETE_OID — sent by Remove-AD* -Recursive to drop subtrees.
 _TREE_DELETE_OID = "1.2.840.113556.1.4.805"

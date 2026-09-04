@@ -1,12 +1,12 @@
 from typing import Any, Tuple, cast
 
 import ldb
-
-from classes.parsing.body_parser import BodyParser
-from classes.parsing.context import RequestContext
 from src.directory.fsmo_roles import FSMO_ROLE_ATTR, FSMO_ROLE_DN_TEMPLATES
 from src.soap.namespaces import CUSTOM_ACTIONS
+
 from classes.handlers.base import BaseHandler
+from classes.parsing.body_parser import BodyParser
+from classes.parsing.context import RequestContext
 
 
 class MoveOperationMasterRoleHandler(BaseHandler):

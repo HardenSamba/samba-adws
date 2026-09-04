@@ -1,6 +1,7 @@
-from classes.parsing.context import RequestContext
 from src.soap.namespaces import CUSTOM_ACTIONS
+
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
 
 
 class NotifyHandler(BaseHandler):

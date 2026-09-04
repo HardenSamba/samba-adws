@@ -29,8 +29,14 @@ repos:
       - id: check-yaml
       - id: check-merge-conflict
 
+  # v0.16.6, not v0.8.6. The ignore list in pyproject.toml names UP045, which
+  # 0.8.6 did not know, and a rule selector ruff does not know is a TOML parse
+  # error rather than a warning: the hook aborted before linting a file, on
+  # every commit since the entry was added, and a gate that fails to start
+  # looks exactly like one that passed. See #29. The pin must know every rule
+  # the config names, and the config must not name a rule the pin lacks.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.16.6
     hooks:
       - id: ruff
         args: [--fix]

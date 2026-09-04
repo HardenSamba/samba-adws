@@ -2,9 +2,10 @@
 
 from io import BytesIO, StringIO
 
-from samba_adws.errors import ADWSClientError
 from src.wcf.records import Record, dump_records, print_records
 from src.wcf.xml2records import XMLParser
+
+from samba_adws.errors import ADWSClientError
 
 
 # Tracks short fixed-size reads while allowing the parser's final EOF probe.

@@ -2,9 +2,9 @@ from typing import Any, Dict, List, Optional
 
 import ldb
 
-from classes.parsing.context import RequestContext
 from classes.directory.schema_cache import SchemaCache
 from classes.handlers.base import BaseHandler
+from classes.parsing.context import RequestContext
 
 
 class SchemaHandler(BaseHandler):
