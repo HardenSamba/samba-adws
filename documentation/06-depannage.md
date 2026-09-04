@@ -267,40 +267,50 @@ Get-ADUser : Unable to find a default server with Active Directory Web Services 
 2. A firewall blocking 9389/tcp from the client.
 3. Client DNS not pointing at the Samba DC (the DC locator needs the SRV records).
 
-### Underlying cause: the Samba `DS_WS` limitation (ADAC + cmdlets WITHOUT `-Server`)
+### Underlying cause: stock Samba does not advertise ADWS (ADAC + cmdlets WITHOUT `-Server`)
 
 If everything above is fine (service up, port reachable, `nltest /dsgetdc` OK) but **automatic
-discovery** still fails, typically with **ADAC** and with cmdlets run **without `-Server`**, this
-is a **Samba limitation**, not a bug in this project.
+discovery** still fails, typically with **ADAC** and with cmdlets run **without `-Server`**, the
+controller is not announcing the service.
 
 Discovery in the AD module and in ADAC does not issue a plain "find a DC" call: it calls the
 DC locator with the **`DS_WEB_SERVICE_REQUIRED`** flag ("only return a DC **if it advertises
-that it runs ADWS**"). However, **Samba does not set the `DS_WS` flag (`NBT_SERVER_ADS_WEB_SERVICE`,
-0x2000) in its Netlogon/CLDAP response**. This project provides the ADWS *service* (TCP 9389) but
-cannot change Samba's CLDAP advertisement (UDP 389). The result is `ERROR_NO_SUCH_DOMAIN (1355)` /
-`ADServerDownException`, **even though ADWS is running and answering** (a direct `-Server` connection works).
+that it runs ADWS**"). **Stock Samba never sets the `DS_WS` flag (`NBT_SERVER_ADS_WEB_SERVICE`,
+0x2000) in its Netlogon/CLDAP response.** This project provides the ADWS *service* (TCP 9389);
+the CLDAP advertisement (UDP 389) is Samba's, and is added by the patch shipped in
+[`patches/samba/`](../patches/samba/README.md), behind `adws:advertise = yes`. Without it the
+result is `ERROR_NO_SUCH_DOMAIN (1355)` / `ADServerDownException`, **even though ADWS is running
+and answering** (a direct `-Server` connection works).
 
 ### Decisive diagnosis
 
 ```powershell
-nltest /dsgetdc:samba.local        # OK  -> the DC can be located (DNS is fine)
-nltest /dsgetdc:samba.local /ws    # 1355 -> Samba does not advertise ADWS = THE cause
+nltest /dsgetdc:samba.local               # OK  -> the DC can be located (DNS is fine)
+nltest /dsgetdc:samba.local /ws /force    # 1355 -> the DC does not advertise ADWS = THE cause
 Test-NetConnection 192.168.141.10 -Port 9389   # True -> the service does answer
 ```
 
-If `/ws` fails while the call without `/ws` succeeds, this is the `DS_WS` limitation. **Nothing to fix on the
-server side.**
+If `/ws` fails while the call without `/ws` succeeds, the advertisement is missing. `/force`
+matters: without it the client answers from its locator cache and says nothing about what the
+controller advertises now.
 
-### Workarounds
+### Fix, and workarounds without it
 
-- **PowerShell**: always pass **`-Server <DC>`** (this short-circuits discovery), the supported and
-  validated path. Set `$PSDefaultParameterValues` once (see [README](../README.md)).
-- **Graphical console**: use **ADUC (`dsa.msc`)**, which speaks **LDAP** directly to Samba and uses
-  **neither** ADWS **nor** flag-based discovery. It works where ADAC is blocked.
-- **ADAC**: requires the `DS_WS` flag. Unblocking it would mean **patching and rebuilding Samba**
-  (setting `NBT_SERVER_ADS_WEB_SERVICE` in `source4/cldap_server/netlogon.c`), which is heavy,
-  fragile, and not advisable on a production DC managed by apt. **No `smb.conf` option** enables
-  it.
+- **Apply the Samba patch** ([`patches/samba/README.md`](../patches/samba/README.md)), set
+  `adws:advertise = yes` in `smb.conf`, restart `samba-ad-dc`, then re-run `nltest ... /ws /force`:
+  it must succeed with `WS` among the flags. ADAC and `-Server`-less cmdlets then work. Verified
+  4 September 2026: Windows 11 client, Samba 4.17.12 on Debian 12, signed in as a member of
+  Domain Admins.
+- **PowerShell without the patch**: always pass **`-Server <DC>`** (this short-circuits discovery),
+  the supported and validated path. Set `$PSDefaultParameterValues` once (see [README](../README.md)).
+- **GUI without the patch**: use **ADUC (`dsa.msc`)**, which speaks **LDAP** directly to Samba and
+  uses **neither** ADWS **nor** flag-based discovery.
+- **ADAC still refuses to open**, with *"Your account or computer is not joined to any domain"*,
+  while `nltest /ws` succeeds: the Windows session is a **local** account. ADAC checks the process
+  token before any network call, and `runas /netonly` keeps that token local. Sign in with a domain
+  account, or start the tool inside a real domain logon (`CreateProcessWithLogonW` with
+  `LOGON_WITH_PROFILE`). Its manifest asks for `highestAvailable`, so an administrator gets a UAC
+  prompt; a launcher that must not prompt sets `__COMPAT_LAYER=RunAsInvoker` first.
 
 ---
 

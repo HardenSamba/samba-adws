@@ -147,13 +147,23 @@ Two ways to fool yourself, both hit while taking these:
   just failed with `ERROR_NO_SUCH_DOMAIN`. Read it off the `Flags:` line, with
   `-cmatch`.
 
-## What this does not do
+## What it gives, verified
 
-Advertising the capability is not the same as serving it. With the flag set,
-`Get-ADDomain` without `-Server` now reaches this module and fails in its
-GSSAPI negotiation, because the server accepts NTLM and refuses Kerberos while
-the locator always returns a name. That defect is tracked in #14 and is what
-still stands between this module and a working Administrative Center.
+Advertising the capability is not the same as serving it, and for a while the
+two did not meet: with the flag set, `Get-ADDomain` without `-Server` reached
+this module and failed in its GSSAPI negotiation (#14). That was not reproduced
+on 4 September 2026: from a Windows 11 client signed in as a member of Domain
+Admins, against Samba 4.17.12 on Debian 12 with this patch and #8 in place, the
+negotiation completed with Kerberos, the server logged every request as
+`SAMBA\<user>`, and the Administrative Center opened the domain, listed its
+containers and accounts, showed full property pages, answered a global search,
+and wrote an edit back to the directory.
+
+Two conditions remain on the client, neither of them this patch's business.
+The Windows session must be a domain logon: ADAC refuses a local account before
+any network call, and `runas /netonly` does not change the token it looks at.
+And `dsac.exe` asks for `highestAvailable`, so an administrator gets a UAC
+prompt unless the launcher sets `__COMPAT_LAYER=RunAsInvoker` first.
 
 ## Keeping it alive
 

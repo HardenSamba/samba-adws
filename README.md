@@ -6,7 +6,8 @@ Web Services** (ADWS, `9389/tcp`) for a **Samba AD** domain controller.
 It bridges the WS-\* requests of Windows clients and the Samba directory (LDB).
 The result: a Windows workstation drives the Samba domain with its usual tools,
 `Get-ADUser`, `Set-ADUser`, the `ActiveDirectory` PowerShell module and the **ADUC** console,
-almost as if it were facing a Microsoft AD (ADAC aside, see [Known limitations](#known-limitations)).
+as if it were facing a Microsoft AD (ADAC needs the DC to advertise ADWS, see
+[Graphical consoles](#graphical-consoles-adac-dsacexe-and-aduc-dsamsc)).
 
 > **Strategic goal:** a sovereign alternative to Microsoft AD, open and auditable,
 > without giving up the existing PowerShell tooling.
@@ -200,23 +201,33 @@ Get-ADObject -SearchBase $schema -LDAPFilter '(objectClass=classSchema)' `
     -ResultPageSize 50 | Select-Object Name -First 10
 ```
 
-### Graphical console: ADUC (`dsa.msc`), not ADAC
+### Graphical consoles: ADAC (`dsac.exe`) and ADUC (`dsa.msc`)
 
-To drive the domain with the mouse, use **ADUC** (Active Directory Users and Computers):
+**ADAC (Active Directory Administrative Center) works** against a Samba DC running this module,
+on two conditions. Verified 4 September 2026 from a Windows 11 client signed in with a member of
+Domain Admins: the domain node lists its containers, `Users` lists every account, a user's
+property pages are fully populated, global search answers, and an edit made in a property page
+reaches the directory. The server logs every request as the signed-in principal.
 
-```powershell
-dsa.msc
-```
+1. **The DC must advertise ADWS.** ADAC locates a controller with `DsGetDcName` and the
+   `DS_WEB_SERVICE_REQUIRED` flag, and stock Samba never sets the matching `DS_WS` bit in its
+   CLDAP answer. The patch in [`patches/samba/`](patches/samba/README.md) adds it, behind
+   `adws:advertise = yes` in `smb.conf`. Check from a joined client:
 
-ADUC speaks **LDAP** directly to Samba: it does not use ADWS and works with no tuning
-(if needed: right-click the root node → *Change Domain Controller* → your DC).
+   ```powershell
+   nltest /dsgetdc:samba.local /ws /force     # must succeed, with WS among the Flags
+   ```
 
-> **⚠️ ADAC (`dsac.exe`) does not connect to a Samba DC.** Its automatic discovery requires the
-> DC to **advertise** the ADWS service through the Netlogon `DS_WS` flag, which **Samba does not emit**
-> (a limitation on the Samba side, not on this project's: there is no `smb.conf` option to enable it).
-> Diagnosis: `nltest /dsgetdc:samba.local /ws` returns `1355`. Details:
-> [06-depannage.md § 7](documentation/06-depannage.md#7-unable-to-find-a-default-server).
-> → For the GUI, stay on **ADUC**; on the command line, **PowerShell `-Server`**.
+2. **The Windows session must be a domain logon.** `dsac.exe` refuses to start when the process
+   token belongs to a local account ("Your account or computer is not joined to any domain"), and
+   `runas /netonly` does not help, because that token stays local. Sign in as a domain user, or
+   open a real domain logon for the tool from a local session (`CreateProcessWithLogonW` with
+   `LOGON_WITH_PROFILE`). Its manifest asks for `highestAvailable`, so an administrator gets a UAC
+   prompt; an unattended launcher sets `__COMPAT_LAYER=RunAsInvoker` before starting it.
+
+**ADUC** (`dsa.msc`) speaks **LDAP** directly to Samba, needs neither of the above, and remains
+the fallback on a DC without the patch (if needed: right-click the root node →
+*Change Domain Controller* → your DC).
 
 ---
 
@@ -254,12 +265,13 @@ Get-ADUser -Filter "Department -eq 'QA'" | Set-ADUser -Description 'updated'
 
 **None of these points is a server bug:**
 
-1. **ADAC (`dsac.exe`) does not connect**, and neither do cmdlets run **without `-Server`**. Their
-   automatic discovery requires the DC to **advertise** ADWS through the Netlogon `DS_WS` flag, which
-   **Samba does not emit** (a limitation on the Samba side, with no `smb.conf` option to enable it;
-   this project provides the ADWS service but not Samba's CLDAP advertisement). Diagnosis: `nltest /dsgetdc:samba.local /ws`
-   → `1355`. **Workaround: ADUC (`dsa.msc`, LDAP) for the GUI, PowerShell `-Server` on the
-   CLI.** Details: [06-depannage § 7](documentation/06-depannage.md#7-unable-to-find-a-default-server).
+1. **Automatic discovery needs the Samba patch.** ADAC (`dsac.exe`), and cmdlets run **without
+   `-Server`**, locate a controller with `DS_WEB_SERVICE_REQUIRED`, and stock Samba does not set the
+   `DS_WS` flag in its CLDAP answer. Without [`patches/samba/`](patches/samba/README.md) applied and
+   `adws:advertise = yes`, `nltest /dsgetdc:samba.local /ws` returns `1355` and ADAC cannot connect.
+   With them, both work (verified 4 September 2026, Samba 4.17.12 on Debian 12). Fallbacks without
+   the patch: ADUC (`dsa.msc`, LDAP) for the GUI, PowerShell `-Server` on the CLI. Details:
+   [06-depannage § 7](documentation/06-depannage.md#7-unable-to-find-a-default-server).
 2. **Self-service password change** (`Set-ADAccountPassword`, old → new):
    fails on the Samba side (`Failed to obtain remote address for the LDAP client`). Samba's
    `password_hash` module requires a `remoteAddress` that a local `SamDB` connection cannot
