@@ -1,0 +1,77 @@
+# What every change must pass, on the Debian the module ships on. Two jobs:
+# the level-0 suite with the type and style gates, and the package built,
+# checked, installed and compared with the checkout installer.
+#
+# Only Debian's own tools: no pip on the runner, for the same reason the
+# module has none at install time (contract 7.2), and because a gate whose
+# version floats is a gate nobody can reproduce. ruff is not in Debian stable
+# and stays a pre-commit hook; the in-house norms checker runs there too, on
+# changed files, since the tree as a whole predates it.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: debian:stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tooling
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 python3-pytest python3-gssapi flake8 mypy
+      - name: Level 0
+        # Everything that needs no directory. python3-samba is not installed
+        # here on purpose: with it, the dc marker would try to open a
+        # directory this container does not have.
+        run: python3 -m pytest -q -m "not dc"
+      - name: Style
+        run: flake8 src classes samba_adws
+      - name: Types
+        run: mypy --strict
+
+  package:
+    runs-on: ubuntu-latest
+    container: debian:stable
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential lintian
+          apt-get build-dep -y .
+      - name: Build
+        run: dpkg-buildpackage -us -uc -b
+      - name: Lintian
+        run: lintian --fail-on error,warning ../samba-adws_*_all.deb
+      - name: Install
+        # No systemd in the container, so the unit's state cannot be asked;
+        # the maintainer script is held to contract 4.2 by tests/test_packaging.py.
+        run: |
+          apt-get install -y ../samba-adws_*_all.deb
+          declared=$(sed -n 's/^version: *//p' MODULE.yaml)
+          test "$(samba-adws --version)" = "samba-adws $declared"
+          samba-adws status --format json | python3 -c 'import json, sys; d = json.load(sys.stdin); assert d["module"] == "samba-adws", d'
+          (cd / && python3 -c 'import samba_adws; print(samba_adws.__file__, samba_adws.__version__)' | grep -q '^/usr/lib/python3/dist-packages/')
+          test -f /usr/lib/systemd/system/samba-adws.service
+          test -f /etc/hardensamba/samba-adws/samba-adws.conf
+          test -f /usr/share/samba-adws/MODULE.yaml
+      - name: The checkout installer puts the same files at the same paths
+        run: |
+          dpkg -L samba-adws | while read -r path; do test -f "$path" && echo "$path"; done \
+            | grep -v -e __pycache__ -e /usr/share/lintian/ | sort > packaged.txt
+          apt-get purge -y samba-adws
+          test ! -e /usr/share/samba-adws
+          tools/installation/install.sh | sort > manual.txt
+          diff packaged.txt manual.txt
+          test "$(samba-adws --version)" = "samba-adws $(sed -n 's/^version: *//p' MODULE.yaml)"
+          samba-adws status --format json | python3 -c 'import json, sys; assert json.load(sys.stdin)["module"] == "samba-adws"'
+          tools/installation/install.sh --uninstall
+          test ! -e /usr/bin/samba-adws
+          test ! -e /usr/share/samba-adws
+          test ! -e /usr/lib/python3/dist-packages/samba_adws
+          test ! -e /etc/hardensamba/samba-adws/samba-adws.conf

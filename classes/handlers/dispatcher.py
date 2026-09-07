@@ -34,7 +34,7 @@ class ADWSDispatcher:
         request: Optional[str] = None
         try:
             request = record.payload_to_xml()
-            context = RequestContext.from_xml(request)
+            context = RequestContext.from_xml(request or "")
             self.logger.info(
                 f"[DISPATCH] action={context.action} message_id={context.message_id}"
             )

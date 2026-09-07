@@ -77,32 +77,42 @@ sudo apt install ../samba-adws_*.deb
 
 It installs the service under `/usr/share/samba-adws`, the `samba-adws` command,
 the unit, and its configuration at `/etc/hardensamba/samba-adws/samba-adws.conf`.
-The service is enabled and started only where a provisioned directory already
-exists; register the `host/<fqdn>` SPN once (§ Kerberos in
-[02-installation.md](documentation/02-installation.md)). Details, and how to
-move an installation made by the script below onto the package:
-[02-installation.md § 3](documentation/02-installation.md#3-the-debian-package-recommended).
-
-**From a checkout**, when the repository is already cloned on the controller,
-everything installs and starts with **a single command**, as `root`:
+The unit is installed and left **disabled** on every controller (contract 4.2):
+once the directory is provisioned and the `host/<fqdn>` SPN is registered
+(§ Kerberos in [02-installation.md](documentation/02-installation.md)), enable
+it yourself:
 
 ```bash
-cd SambaAD_ADWS        # the cloned directory
+sudo systemctl enable --now samba-adws
+```
+
+Details, and how to move an installation made by the script below onto the
+package:
+[02-installation.md § 3](documentation/02-installation.md#3-the-debian-package-recommended).
+
+**From a checkout**, on a controller with no access to a package archive, the
+installer puts the same files at the same paths as the package, as `root`:
+
+```bash
+cd samba-adws          # the cloned directory
 sudo tools/installation/install.sh
 ```
 
 `install.sh` is idempotent and sovereign (readable bash, no binary): it
 installs the system packages through **apt** (**no `pip`, no virtualenv,
-no `--break-system-packages`**), registers the `host/<fqdn>` SPN if it is missing, writes the
-`/etc/default/samba-adws` configuration, installs and starts the systemd service (rendered from
-[`tools/installation/samba-adws.service`](tools/installation/samba-adws.service)) and opens `9389/tcp`.
+no `--break-system-packages`**), copies the service under
+`/usr/share/samba-adws`, installs the command, the unit, the configuration
+file, the manual page and the documentation exactly where the package does -
+CI diffs its list against `dpkg -L` - registers the `host/<fqdn>` SPN if it is
+missing, and enables nothing. It prints each path it installs.
 
 | Action | Command |
 |---|---|
-| **Install + start** | `sudo tools/installation/install.sh` |
+| **Install** | `sudo tools/installation/install.sh` |
+| **Enable and start** | `sudo systemctl enable --now samba-adws` |
 | **Stop cleanly** | `sudo tools/installation/stop.sh` |
 | Restart | `sudo systemctl restart samba-adws` |
-| Reconfigure (host/port/log) | edit `/etc/default/samba-adws` then restart |
+| Reconfigure (host/port/log) | edit `/etc/hardensamba/samba-adws/samba-adws.conf` then restart |
 | Uninstall | `sudo tools/installation/install.sh --uninstall` |
 | Follow the logs | `journalctl -u samba-adws -f` |
 

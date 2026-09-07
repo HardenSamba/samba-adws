@@ -122,3 +122,45 @@ def test_the_maintainer_scripts_end_by_exiting_zero(script: str) -> None:
              if ln.strip()]
     assert lines[-1] == "exit 0", f"{script} does not end with exit 0"
     assert "#DEBHELPER#" in lines, f"{script} drops debhelper's own snippets"
+
+
+# The unit is never enabled or started by the package (contract 4.2): the
+# maintainer script has no such call, and debhelper is told the same.
+def test_the_package_never_enables_or_starts_the_unit() -> None:
+    postinst = (DEBIAN / "samba-adws.postinst").read_text(encoding="utf-8")
+    commands = [ln for ln in postinst.splitlines()
+                if not ln.lstrip().startswith(("#", "echo"))]
+    assert not [ln for ln in commands if re.search(r"\b(enable|start)\b", ln)], commands
+    assert "try-restart" in postinst, "an upgrade must restart a running service"
+    rules = (DEBIAN / "rules").read_text(encoding="utf-8")
+    assert "dh_installsystemd --no-enable --no-start" in rules
+
+
+# The checkout installer puts the package's files at the package's paths: every
+# path rules installs by hand, and every artefact debhelper adds, is named in
+# the installer, from the same source files, and no template of its own is left.
+def test_the_installer_mirrors_the_package() -> None:
+    installer = (ROOT / "tools" / "installation" / "install.sh").read_text(encoding="utf-8")
+    for path in ("/usr/share/samba-adws", "/usr/bin/samba-adws",
+                 "/usr/lib/systemd/system/samba-adws.service",
+                 "/usr/lib/python3/dist-packages/samba_adws",
+                 "/etc/hardensamba/samba-adws", "/usr/share/doc/samba-adws",
+                 "/usr/share/man/man1/samba-adws.1.gz",
+                 "/usr/share/python3/runtime.d/samba-adws.rtupdate"):
+        assert path.replace("samba-adws", "$NAME") in installer, f"{path} is not installed"
+    for source in ("debian/$NAME.wrapper", "debian/$NAME.shim.py", "debian/$NAME.service",
+                   "debian/$NAME.conf", "debian/$NAME.1", "debian/copyright"):
+        assert source in installer, f"the installer does not install from {source}"
+    assert "enable --now" not in installer.replace("systemctl enable --now $NAME\"", "")
+    assert not (ROOT / "tools" / "installation" / "samba-adws.service").exists(), (
+        "the installer's own unit template is back; the package's unit is the one unit")
+
+
+# CI builds the package, checks it with lintian, installs it, and diffs the
+# installer's list against dpkg -L: the parity is held by a machine.
+def test_ci_holds_the_installer_to_the_package() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    for step in ("dpkg-buildpackage -us -uc -b", "lintian --fail-on error,warning",
+                 "dpkg -L samba-adws", "tools/installation/install.sh | sort",
+                 "diff packaged.txt manual.txt", "install.sh --uninstall"):
+        assert step in workflow, f"ci.yml lacks: {step}"

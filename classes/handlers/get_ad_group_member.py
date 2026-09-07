@@ -47,7 +47,7 @@ class GetADGroupMemberHandler(BaseHandler):
         seen.add(dn)
         try:
             results: Any = self.db.db.search(base=dn, scope=ldb.SCOPE_BASE,
-                                              expression="(objectClass=*)", attrs=["member"])
+                                             expression="(objectClass=*)", attrs=["member"])
         except ldb.LdbError:
             return []
         members: List[str] = []

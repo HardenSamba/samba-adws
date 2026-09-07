@@ -1,19 +1,24 @@
 #!/bin/sh
-# Enables and starts the service where it can run, and only there.
+# Leaves the unit installed and disabled, whatever the controller's state.
 #
-# The unit is installed by debhelper with --no-enable --no-start, because
-# whether the service can run at all depends on a provisioned directory: it
-# opens /var/lib/samba/private/sam.ldb and needs a host service principal
-# name, and starting it before either exists produces a failed unit whose
-# journal points at Samba. So the decision is taken here, from the one fact
-# that settles it, and nothing below may fail the installation: a controller
-# without a domain yet is a normal state, not an error.
+# Contract 4.2: a unit MUST NOT be enabled by default on install; enabling it
+# is the administrator's explicit action, or the job of hardensamba-roles. An
+# earlier version of this script enabled and started the service when a
+# provisioned directory existed, and it never did so in practice: debhelper's
+# own snippet above records the unit's state before this code runs,
+# deb-systemd-helper enable defers to that record, and deb-systemd-invoke
+# does not start a unit that is not enabled - so both calls were silent
+# no-ops behind "|| true", and the unit was found disabled and inactive on a
+# provisioned controller. The rule and the facts agree; the branch is gone.
 #
-# deb-systemd-helper and deb-systemd-invoke rather than systemctl. The helper
-# remembers that it was this package that enabled the unit, and does not
-# enable it again on an upgrade after an operator disabled it; the invoker
-# honours policy-rc.d, which is what keeps this from starting a domain
-# controller inside the chroot an image is built in.
+# An upgrade restarts a running service onto the new code and leaves a
+# stopped one stopped (try-restart); a fresh installation says on standard
+# error what the administrator does next. Nothing here may fail the
+# installation: a controller without a domain yet is a normal state.
+#
+# deb-systemd-invoke rather than systemctl: it honours policy-rc.d, which is
+# what keeps this from restarting a service inside the chroot an image is
+# built in.
 #
 # The SPN is deliberately not registered here. A maintainer script cannot
 # assume the directory is up or that it may write to it; the step is
@@ -24,18 +29,13 @@ set -e
 
 case "$1" in
     configure)
-        if [ -d /run/systemd/system ] && [ -f /var/lib/samba/private/sam.ldb ]; then
-            deb-systemd-helper enable samba-adws.service >/dev/null 2>&1 || true
-            if [ -n "${2:-}" ]; then
-                # An upgrade: pick up the new code if it is running, leave it
-                # stopped if the operator stopped it.
+        if [ -n "${2:-}" ]; then
+            if [ -d /run/systemd/system ]; then
                 deb-systemd-invoke try-restart samba-adws.service >/dev/null 2>&1 || true
-            else
-                deb-systemd-invoke start samba-adws.service >/dev/null 2>&1 || true
             fi
-        elif [ ! -f /var/lib/samba/private/sam.ldb ]; then
-            echo "samba-adws: no provisioned directory at /var/lib/samba/private/sam.ldb;" >&2
-            echo "samba-adws: the service is installed and left disabled. After provisioning:" >&2
+        else
+            echo "samba-adws: the service is installed and left disabled (contract 4.2)." >&2
+            echo "samba-adws: once the directory is provisioned and host/<fqdn> is registered:" >&2
             echo "samba-adws:     systemctl enable --now samba-adws" >&2
         fi
         ;;
