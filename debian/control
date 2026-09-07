@@ -33,8 +33,9 @@ Description: Active Directory Web Services for Samba (TCP 9389)
  samba-adws command runs the service in the foreground, checks the
  installation, or drives the supported Linux client.
  .
- The unit is installed and enabled and started only where a provisioned
- directory already exists. On a controller that has not been provisioned it
- is left disabled: the service needs a directory and a host service
- principal name, and starting it before either exists fails in a way that
- points at Samba rather than at the missing domain.
+ The unit is installed and left disabled on every controller: enabling it
+ is the administrator's explicit action once the directory is provisioned
+ and the host service principal name is registered, since the service needs
+ both and starting it before either exists fails in a way that points at
+ Samba rather than at the missing domain. An upgrade restarts a running
+ service onto the new code and leaves a stopped one stopped.

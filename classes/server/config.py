@@ -20,12 +20,14 @@ class ServerConfig:
     timeout: int = 300
     max_message_size: int = DEFAULT_MAX_MESSAGE_SIZE
 
+
 @dataclass
 class SambaConfig:
     """Samba AD configuration"""
     admin_user: Optional[str] = None
     admin_password: Optional[str] = None
     realm: Optional[str] = None
+
 
 @dataclass
 class LogConfig:
@@ -35,6 +37,7 @@ class LogConfig:
     max_size: int = 10 * 1024 * 1024  # 10MB
     backup_count: int = 5
     format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
 
 class Config:
     """Main configuration class"""

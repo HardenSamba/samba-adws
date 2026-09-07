@@ -52,8 +52,8 @@ override_dh_auto_install:
 override_dh_python3:
 	dh_python3 /usr/share/samba-adws
 
-# Installed, not enabled and not started. Whether the service can run depends
-# on a provisioned directory existing, which postinst checks for; see there.
+# Installed, never enabled and never started (contract 4.2): enabling is the
+# administrator's action once the directory is provisioned; see postinst.
 #
 # --no-stop-on-upgrade as well, and it is load-bearing. Without it debhelper's
 # prerm stops the service on an upgrade while --no-start keeps its postinst

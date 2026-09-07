@@ -456,7 +456,9 @@ Or, when the length was not a plausible number at all:
 Every length a peer announces is bounded before it is read, so that an
 unauthenticated client cannot make the server allocate an arbitrary amount of
 memory by announcing a large one. The ceiling is `ADWS_MAX_MESSAGE_SIZE` in
-`/etc/default/samba-adws`, 1 MB by default. The connection is closed rather than
+`/etc/hardensamba/samba-adws/samba-adws.conf`, 1 MB by default (a value in
+`/etc/default/samba-adws`, from an earlier installer, is overridden by that
+file's own). The connection is closed rather than
 answered with a SOAP fault: the violation is detected below the message layer,
 where there is no `MessageID` to put in a `RelatesTo`, and a fault without one
 is ignored by the client anyway (§ 6).
@@ -471,7 +473,7 @@ large `Get-ADUser -Filter *` result is unaffected. A write of a very large
 attribute value can reach it. Raise the ceiling and restart:
 
 ```bash
-sudo sed -i 's/^ADWS_MAX_MESSAGE_SIZE=.*/ADWS_MAX_MESSAGE_SIZE=4194304/' /etc/default/samba-adws
+sudo sed -i 's/^ADWS_MAX_MESSAGE_SIZE=.*/ADWS_MAX_MESSAGE_SIZE=4194304/' /etc/hardensamba/samba-adws/samba-adws.conf
 sudo systemctl restart samba-adws
 ```
 

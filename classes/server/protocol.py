@@ -207,4 +207,3 @@ class ProtocolHandler:
         record_name = record.__class__.__name__
         self.logger.debug(f"[SEND] {record_name} ({len(data)} bytes)")
         self.stream.write(data)
-

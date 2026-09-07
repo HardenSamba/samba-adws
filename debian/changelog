@@ -6,5 +6,14 @@ samba-adws (1.0.0) unstable; urgency=medium
     under /etc/hardensamba/samba-adws/ as a conffile. Replaces the
     from-checkout installer as the documented path; that script remains for
     a source install.
+  * Leave the unit disabled on every controller (contract 4.2). The
+    conditional enable never took effect: debhelper's own snippet records
+    the unit's state first and the helper defers to it (samba-adws#45).
+  * Make the checkout installer put the package's files at the package's
+    paths, printed for CI to diff against dpkg -L; its own unit template is
+    gone, the package's unit is the one unit.
+  * Add CI: the level-0 suite, flake8 and mypy on debian:stable, and the
+    package built, checked with lintian, installed and compared with the
+    installer.
 
  -- HardenSamba <hardensamba@users.noreply.github.com>  Fri, 04 Sep 2026 12:00:00 +0000
