@@ -146,6 +146,47 @@ was given.
 domain node without being told which controller to use, and the server logs every request under
 the principal that signed in.
 
+### What was verified from the console
+
+On 11 September 2026, from a Windows 11 client, signed in as a member of Domain Admins, driving
+`dsac.exe` itself (its dialogs, not the cmdlets it generates), against samba-adws 1.0.1 on Samba
+4.17.12 rebuilt as above. Every operation was checked afterwards in the directory and in the
+server log, which showed no fault:
+
+| In the console | What the server received | Result |
+|---|---|---|
+| *New > Organizational unit*, protected from accidental deletion (the default) | `Create`, then `Put` of `nTSecurityDescriptor` | OU present, `ProtectedFromAccidentalDeletion` true |
+| *New > Computer* | `Create`, `SetPassword` (random 120-character password), `Put` enabling it | `userAccountControl` 4096, password set |
+| *New > User* with a password | `Create` (514), `SetPassword`, `Put` enabling it, `Put` of the security descriptor, `Put` of `pwdLastSet = 0` | enabled, must change password at next logon |
+| *New > User* with the password boxes left empty | `Create` (514), the two `Put` | disabled, no password: ADAC's own behaviour, the same as on Windows |
+| *New > Group*, universal, security | `Create` | `Universal/Security` |
+| *Properties* of a user, office and description changed | `Put` | both attributes written |
+| *Disable*, then *Enable* | two `Put` of `userAccountControl` | 514, then 512 |
+| *Add to group…*, through the Windows object picker | `Put` of `member` | member present |
+| *Delete* | `Delete` | object gone |
+
+Two things the same session established that are not the server's doing. A user or computer
+that is protected from accidental deletion cannot be moved either, on Windows as here: clear the
+protection first. And adding an account to its own primary group (`Domain Users` for a user)
+is refused with *already set via primaryGroupID*, as Windows refuses it.
+
+Rights are the directory's, not the console's. From the same client, a plain domain user was
+refused the creation of a user and of a computer and the modification of another user
+(`insufficient access rights`); once granted *create/delete user objects* and *write user
+properties* on one OU with `samba-tool dsacl set`, the same account could create and modify users
+there and was still refused computers. ADWS runs every request as the principal that
+authenticated it, so the console shows exactly the rights the account has.
+
+Mandatory attributes follow Windows: a user or a group created without `sAMAccountName` gets a
+generated one (`$96F0A53C-885AEFE01311E1D2`), a computer whose `sAMAccountName` lacks the trailing
+`$` gets it added, a duplicate `sAMAccountName` and an attribute the schema does not know are
+refused with the server's message, and an empty password is refused.
+
+Replication was not exercised: the lab has one controller (`samba-tool drs showrepl` lists no
+partner). What the console writes goes through Samba's own LDB modules, the same path
+`samba-tool` and LDAP take, so a second controller receives it the way it receives any other write;
+that claim is Samba's, not this module's, and it was not measured here.
+
 ## 5. After a Samba update
 
 The rebuilt package is versioned `<Debian version>+adws1`, which sorts **below** the next Debian

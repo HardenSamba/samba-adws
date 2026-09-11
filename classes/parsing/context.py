@@ -10,6 +10,7 @@ from classes.parsing.context_values import (
     read_requested_attributes,
     unescape_xml_entities,
 )
+from classes.parsing.xml_chars import restore_tree
 
 
 # Represents the fields extracted from one ADWS request.
@@ -38,7 +39,7 @@ class RequestContext:
     def from_xml(cls, xml: str) -> "RequestContext":
         """Parse XML to extract request context."""
         try:
-            root = ET.fromstring(xml)
+            root = restore_tree(ET.fromstring(xml))
             values = read_core(root)
             values["requested_attributes"] = read_requested_attributes(
                 root, bool(values["is_imda"])

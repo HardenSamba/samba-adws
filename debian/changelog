@@ -6,8 +6,14 @@ samba-adws (1.0.1) unstable; urgency=medium
     makes the Active Directory Administrative Center find a Samba
     controller: stock Samba never sets DS_SERVER_WEBSERV, and the module
     alone cannot. documentation/08-adac.md.
+  * Carry the characters XML 1.0 cannot through the request path. The
+    random password New-ADComputer sets on every computer it creates uses
+    C0 controls and carriage returns; the SetPassword that carried it failed
+    to parse, and every computer created from Windows or the Administrative
+    Center stayed disabled without a password. documentation/06-depannage.md
+    section 11.
 
- -- HardenSamba <hardensamba@users.noreply.github.com>  Fri, 04 Sep 2026 17:30:00 +0000
+ -- HardenSamba <hardensamba@users.noreply.github.com>  Fri, 11 Sep 2026 12:00:00 +0000
 
 samba-adws (1.0.0) unstable; urgency=medium
 

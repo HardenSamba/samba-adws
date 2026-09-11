@@ -16,6 +16,7 @@ Errors actually encountered in real runs, with their causes and their fixes.
 | Mutations refused | [§ Insufficient rights](#8-insufficient-rights) |
 | Write with accented characters → `ADServerDownException` / `undefined entity` | [§ Non-ASCII characters](#9-non-ascii-characters-in-a-write) |
 | A connection drops with no fault, log says `[LIMIT]` | [§ Announced size](#10-a-connection-is-closed-on-the-announced-size) |
+| `New-ADComputer` / ADAC *New Computer* → `Failed to parse request XML: not well-formed (invalid token)`, object created but disabled | [§ Characters XML cannot carry](#11-failed-to-parse-request-xml-not-well-formed-invalid-token) |
 
 ---
 
@@ -485,6 +486,62 @@ sudo systemctl restart samba-adws
 The value only takes effect on restart. Windows ADWS applies the same 1 MB
 default, so a request refused here is a request a Windows domain controller
 would also refuse.
+
+---
+
+## 11. Failed to parse request XML: not well-formed (invalid token)
+
+### Symptom
+
+From PowerShell:
+
+```
+New-ADComputer : Failed to parse request XML: not well-formed (invalid token): line 14, column 21
+```
+
+From the Administrative Center, the *New Computer* dialog reports the same
+text. In both cases **the computer object exists afterwards, disabled
+(`userAccountControl` 4098) and without a password**. The server log shows a
+`Create` that succeeded, then:
+
+```
+[DISPATCH] unexpected failure
+xml.etree.ElementTree.ParseError: not well-formed (invalid token): line 14, column 21
+[DISPATCH] 192.168.141.11:63276 sent a request that did not parse; faulting with the MessageID recovered from its text
+```
+
+The column varies from one run to the next. Fixed in 1.0.1; the section stays
+for a controller running an older payload.
+
+### Cause
+
+`New-ADComputer`, and so ADAC, creates the object and then calls
+`AccountManagement/SetPassword` with a **random 120-character password drawn
+from the whole of Unicode**: C0 control characters, carriage returns, anything.
+WCF binary XML carries every code point. The server turns the binary records
+into XML text before parsing them, and XML 1.0 has no representation for the
+C0 controls other than tab and line feed, not even as a character reference;
+carriage return is worse, since a parser silently rewrites it as a line feed.
+So the second request of every computer creation failed to parse, and the
+account stayed as `Create` had left it.
+
+Users were never affected: their password is one an operator typed.
+
+### Fix
+
+Since 1.0.1, [`src/wcf/records/text.py`](../src/wcf/records/text.py) writes
+each of those code points as a private-use marker (`U+E000`) followed by four
+hex digits, and
+[`classes/parsing/xml_chars.py`](../classes/parsing/xml_chars.py) restores them
+on every parsed tree, so no handler ever sees the marker and `SetPassword`
+receives the exact password the client generated.
+[`tests/unit/test_xml_chars.py`](../tests/unit/test_xml_chars.py) pins the
+whole path, bytes to handler.
+
+Verified 11 September 2026 from a Windows 11 client: `New-ADComputer` in its
+four forms (plain, `-Enabled -DNSHostName -Description`, `-ManagedBy`,
+pre-Windows 2000), and the Administrative Center's *New > Computer* dialog,
+each leaving an enabled account (`userAccountControl` 4096) with a password.
 
 ---
 

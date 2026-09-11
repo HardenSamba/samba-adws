@@ -46,8 +46,27 @@ except ImportError:
 # ...) must stay a literal char, else ElementTree raises "undefined entity".
 _XML_ENTITY_BY_CP = {0x3C: '&lt;', 0x3E: '&gt;', 0x26: '&amp;', 0x22: '&quot;'}
 
+# The code points XML 1.0 cannot carry at all, not even as a character
+# reference: the C0 controls other than tab and line feed, the surrogates,
+# the two non-characters -- and carriage return, which XML does allow but
+# which every parser silently turns into a line feed. WCF binary XML carries
+# all of them, and the random 120-character password the ActiveDirectory
+# module sets on every computer it creates uses all of them. Each travels
+# through the text form as a private-use marker followed by four hex digits,
+# and classes/parsing/xml_chars.py turns them back after parsing. The marker
+# itself is written the same way, so a real U+E000 in a value survives too.
+XML_CHAR_MARKER = ''
+
+
+def needs_marker(cp):
+    return ((cp < 0x20 and cp not in (0x09, 0x0A))
+            or 0xD800 <= cp <= 0xDFFF
+            or cp in (0xFFFE, 0xFFFF, 0xE000))
+
 
 def escapecp(cp):
+    if needs_marker(cp):
+        return '%s%04X' % (XML_CHAR_MARKER, cp)
     return _XML_ENTITY_BY_CP.get(cp, chr(cp))
 
 
