@@ -1,7 +1,7 @@
 name: samba-adws
 summary: Active Directory Web Services for Samba, so Windows tooling can manage the
   domain.
-version: 1.0.0
+version: 1.0.1
 language:
   primary: python
   exceptions:

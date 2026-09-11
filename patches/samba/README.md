@@ -57,6 +57,16 @@ is tracked there rather than done from here.
 
 ## Building a patched Samba
 
+Everything in this section is done by one command,
+[`tools/installation/patch-samba.sh`](../../tools/installation/patch-samba.sh)
+(`samba-adws patch-samba` once the package is installed): it fetches the source
+of the installed version, adds the patch to `debian/patches/series`, rebuilds
+at a local version, proves the artefacts with `nm` and `strings`, installs the
+set through `apt` and reads the reply back.
+[`documentation/08-adac.md`](../../documentation/08-adac.md) is its page. What
+follows is the recipe it automates, for the reader who does it by hand, on
+another distribution, or on a Samba the anchor has moved under.
+
 Verified on Debian 13 (trixie) against `samba_4.22.10+dfsg-0+deb13u2`, which is
 what the appliance runs. It was first verified on Debian 12 with Samba 4.17.12;
 the differences between the two are recorded below, because the older recipe
@@ -78,56 +88,58 @@ what the call needs.
 
 ### Which files to replace, and how to know
 
-`fill_netlogon_samlogon_response()` is compiled into a static subsystem. There
-is no single module to swap: it is linked into several installed artefacts and
-all of them have to move together. **Do not copy the list from a previous
-release.** On 4.22.10 one of the three from 4.17 does not exist at all —
-`libdsdb-module-samba4.so.0` is now `libdsdb-module-private-samba.so.0`.
+`fill_netlogon_samlogon_response()` is defined in one shared library and
+called from several others (`rootdse.so`, `nbtd.so`, `libdcerpc-server`),
+which resolve it at load time. Only the library that *defines* it carries the
+patch; the callers list the same symbol as undefined (`U` in `nm`) and are
+unchanged by it. **Do not copy the name from a previous release.** On 4.17 the
+defining library is `libdsdb-module-samba4.so.0`; on 4.22.10 it is
+`libdsdb-module-private-samba.so.0`.
 
-Derive it from the build instead. `debian/tmp` is what the package installs,
-already at the right path and with the soname the installed tree expects, so
-there is no mapping to get wrong:
+Derive it from the build. `debian/tmp` is what the package installs, already at
+the right path and with the soname the installed tree expects, so there is no
+mapping to get wrong. Filter on the symbol type, or every caller shows up too:
 
 ```console
 # cd samba-4.22.10+dfsg
 # find debian/tmp -type f \( -name '*.so' -o -name '*.so.*' \) |
     while read -r f; do
-        n=$(nm -a "$f" 2>/dev/null | grep -c fill_netlogon_samlogon_response)
+        n=$(nm -a "$f" 2>/dev/null | grep -cE ' [TtWw] fill_netlogon_samlogon_response$')
         [ "$n" -gt 0 ] && echo "${f#debian/tmp}"
     done
-/usr/lib/x86_64-linux-gnu/samba/ldb/rootdse.so
 /usr/lib/x86_64-linux-gnu/samba/libdsdb-module-private-samba.so.0
-/usr/lib/x86_64-linux-gnu/samba/service/nbtd.so
 ```
 
 Count the matches rather than testing with `grep -q`: under `set -o pipefail`,
 `grep -q` closes the pipe on its first match, `nm` takes a `SIGPIPE`, and the
-pipeline reports failure precisely when the symbol *is* there.
+pipeline reports failure precisely when the symbol *is* there. And filter on
+`[TtWw]`: the first version of this check counted every mention of the symbol,
+and on a build that was entirely correct it reported three libraries as
+unpatched, because they call the function without containing it.
 
-Copy each to the same path on the controller, keep the originals — a copy of
-each is the whole rollback — and `systemctl restart samba-ad-dc`.
+Copy it to the same path on the controller, keep the original — that copy is
+the whole rollback — and `systemctl restart samba-ad-dc`. (The first version
+of this recipe copied the two callers as well, `rootdse.so` and `nbtd.so`,
+because the unfiltered `nm` listed them. It did no harm, since they were
+built from the same tree, and it was not needed.)
 
-On Debian 13 those three artefacts belong to three different binary packages,
-read out of the release's own `Contents-amd64` index rather than guessed:
-
-| Artefact | Debian binary package |
-|---|---|
-| `usr/lib/x86_64-linux-gnu/samba/ldb/rootdse.so` | `samba-dsdb-modules` |
-| `usr/lib/x86_64-linux-gnu/samba/libdsdb-module-private-samba.so.0` | `samba-libs` |
-| `usr/lib/x86_64-linux-gnu/samba/service/nbtd.so` | `samba` |
+On Debian 13 the defining library belongs to `samba-libs`, read out of the
+release's own `Contents-amd64` index rather than guessed
+(`usr/lib/x86_64-linux-gnu/samba/libdsdb-module-private-samba.so.0`); on
+Debian 12, `libdsdb-module-samba4.so.0`, in the same package.
 
 ### Installing it as packages, and why that means all of them
 
-Copying three files works and is what the recipe above does. It is also what
-makes the announcement fragile: the files belong to `dpkg`, `dpkg -V samba`
-reports them as modified from then on, and the next `apt upgrade` puts the
-stock ones back.
+Copying the file works and is what the recipe above does. It is also what
+makes the announcement fragile: the file belongs to `dpkg`, `dpkg -V samba-libs`
+reports it as modified from then on, and the next `apt upgrade` puts the stock
+one back.
 
 The durable route is to rebuild the source package and install the result, so
 the patch lives inside a package `apt` understands. That route has a
 constraint which is not obvious and is not a matter of taste: **you cannot ship
-only the three packages above.** Debian's Samba binaries pin each other to an
-exact version, checked in trixie's `Packages` index:
+only `samba-libs`.** Debian's Samba binaries pin each other to an exact
+version, checked in trixie's `Packages` index:
 
 ```
 samba              Depends: samba-libs (= 2:4.22.10+dfsg-0+deb13u1),
@@ -182,8 +194,11 @@ locator, which is the field the patch changes:
 | `yes` | `0x000033fd` | set |
 
 The same `0x000033fd` was read on 4 September 2026 from a second controller,
-`samba.local`, running Debian 12 with Samba **4.17.12** and the three artefacts
-replaced by hand. Two Samba releases five apart, the same answer: the patch is
+`samba.local`, running Debian 12 with Samba **4.17.12** and the library
+replaced by hand, and again on 11 September 2026 from the same controller
+once `patch-samba.sh` had replaced that copy with rebuilt packages
+(`2:4.17.12+dfsg-0+deb12u4+adws1`, `dpkg -V` clean). Two Samba releases five
+apart, the same answer: the patch is
 not anchored to a version, and the value in that table is what to compare
 against rather than a number from one machine.
 
@@ -273,7 +288,8 @@ line evidence that the announcement works.** Three things follow:
   proves the client half is `nltest /dsgetdc:<realm> /ws /force` from a joined
   Windows machine. Both are above. An appliance built from
   `HardenSamba/hardensamba` runs the first of them in `tests/appliance-check.sh`
-  on every run.
+  on every run; on any other controller, `samba-adws patch-samba --check` runs
+  it, and says whether the installed samba is still the rebuilt one.
 
 `samdb_server_type()`, named in most write-ups on this subject, does not exist
 in Samba at all. Neither does the `0x00100000` those write-ups give as the

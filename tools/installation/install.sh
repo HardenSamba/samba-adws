@@ -107,11 +107,20 @@ payload() {
     install -d "$PAYLOAD/tools/test"
     cp -R "$HERE/src" "$HERE/classes" "$HERE/samba_adws" "$HERE/MODULE.yaml" "$PAYLOAD/"
     install -m 0644 "$HERE/tools/test/test_adws.py" "$PAYLOAD/tools/test/test_adws.py"
+    # The Samba patch and the script that rebuilds Samba with it, at the
+    # paths a checkout has, as debian/rules installs them: the script finds
+    # patches/samba/ relative to itself from either place.
+    install -d "$PAYLOAD/patches/samba" "$PAYLOAD/tools/installation"
+    install -m 0644 "$HERE"/patches/samba/*.patch "$HERE/patches/samba/README.md" \
+        "$PAYLOAD/patches/samba/"
+    install -m 0755 "$HERE/tools/installation/patch-samba.sh" \
+        "$PAYLOAD/tools/installation/patch-samba.sh"
     find "$PAYLOAD" -name __pycache__ -prune -exec rm -rf {} +
     find "$PAYLOAD" -name '*.pyc' -delete
     chown -R root:root "$PAYLOAD"
     find "$PAYLOAD" -type d -exec chmod 0755 {} +
     find "$PAYLOAD" -type f -exec chmod 0644 {} +
+    chmod 0755 "$PAYLOAD/tools/installation/patch-samba.sh"
     find "$PAYLOAD" -type f -name '*.py' \
         -exec sed -i '1s|^#!.*python2.*$|#!/usr/bin/python3|' {} +
     find "$PAYLOAD" -type f | sort

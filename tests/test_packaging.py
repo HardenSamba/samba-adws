@@ -113,6 +113,23 @@ def test_the_import_shim_runs_the_real_init_rather_than_copying_it() -> None:
     assert "usr/lib/python3/dist-packages/samba_adws/__init__.py" in rules
 
 
+# The patch the Administrative Center needs, and the command that applies it,
+# ship with the package at the paths a checkout has, so "samba-adws
+# patch-samba" finds patches/samba/ the way the script does from a checkout.
+def test_the_samba_patch_and_its_script_ship_together() -> None:
+    rules = (DEBIAN / "rules").read_text(encoding="utf-8")
+    wrapper = (DEBIAN / "samba-adws.wrapper").read_text(encoding="utf-8")
+    patches = sorted(p.name for p in (ROOT / "patches" / "samba").glob("*.patch"))
+    assert patches, "patches/samba/ carries no patch"
+    for name in patches:
+        assert f"patches/samba/{name}" in rules, f"rules does not ship {name}"
+    assert "tools/installation/patch-samba.sh" in rules, "rules does not ship the script"
+    assert "patch-samba)" in wrapper and "tools/installation/patch-samba.sh" in wrapper
+    installer = (ROOT / "tools" / "installation" / "install.sh").read_text(encoding="utf-8")
+    assert "patches/samba/*.patch" in installer and "patch-samba.sh" in installer, (
+        "the checkout installer does not put the patch and the script where the package does")
+
+
 # The maintainer scripts never fail an installation on a controller without a
 # domain: every command that could is guarded, and the script exits zero.
 @pytest.mark.parametrize("script", ["samba-adws.postinst", "samba-adws.prerm",

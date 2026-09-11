@@ -1,3 +1,14 @@
+samba-adws (1.0.1) unstable; urgency=medium
+
+  * Ship the Samba CLDAP advertisement patch and "samba-adws patch-samba",
+    which rebuilds Debian's samba with it, installs the result at a local
+    version and verifies the controller's own netlogon reply. It is what
+    makes the Active Directory Administrative Center find a Samba
+    controller: stock Samba never sets DS_SERVER_WEBSERV, and the module
+    alone cannot. documentation/08-adac.md.
+
+ -- HardenSamba <hardensamba@users.noreply.github.com>  Fri, 04 Sep 2026 17:30:00 +0000
+
 samba-adws (1.0.0) unstable; urgency=medium
 
   * First Debian packaging (samba-adws#6). Installs the service as a payload

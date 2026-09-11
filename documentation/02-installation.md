@@ -112,7 +112,8 @@ is invisible until a machine installs the package:
 |---|---|
 | the service and the client | `/usr/share/samba-adws/` (a payload, not the Python path: the tree is two sibling top-level packages, `src` and `classes`, and neither name may be claimed in a shared `site-packages`) |
 | the unit | `/lib/systemd/system/samba-adws.service` |
-| the command | `/usr/bin/samba-adws` — `run`, `check`, `--version`, and every client verb (`naming-context`, `search`, `status`) |
+| the command | `/usr/bin/samba-adws` — `run`, `check`, `patch-samba`, `--version`, and every client verb (`naming-context`, `search`, `status`) |
+| the Samba patch and the script that applies it | `/usr/share/samba-adws/patches/samba/` and `/usr/share/samba-adws/tools/installation/patch-samba.sh` (§7) |
 | the configuration | `/etc/hardensamba/samba-adws/samba-adws.conf`, a conffile (§3.1) |
 | the log | `/var/log/samba-adws/adws.log`, in a directory systemd creates |
 
@@ -286,6 +287,21 @@ If `Get-ADRootDSE` returns an object containing `defaultNamingContext`, the depl
 ### Full test suite
 
 See [05-tests.md](05-tests.md) for `Test-ADWS-Sovereign.ps1`, which covers reads, mutations, groups, schema and stress.
+
+## 7. Making the Administrative Center find the controller
+
+Installing the service is not enough for ADAC (`dsac.exe`): the controller must also announce
+ADWS in its CLDAP netlogon reply, and stock Samba cannot. One command on the controller rebuilds
+Debian's samba with the patch this repository carries, installs it, and reads the reply back:
+
+```bash
+sudo samba-adws patch-samba                 # from the package
+sudo tools/installation/patch-samba.sh      # from a checkout
+```
+
+It takes tens of minutes and about 4 GB under `/var/tmp`. [08-adac.md](08-adac.md) is the page
+for it: what it does, `--check`, what a Samba security update does to it, and the two conditions
+on the Windows side.
 
 ## No virtualenv, no pip
 

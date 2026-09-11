@@ -3,7 +3,7 @@
 # The version `MODULE.yaml` declares. Held here as well because `status`
 # reports it and a probe cannot read the manifest; `tests/test_cli.py` holds
 # the two together, so one cannot drift from the other quietly.
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 from samba_adws._account import Account
 from samba_adws._search_base import is_guid_base

@@ -16,6 +16,8 @@ usage() {
     cat <<'EOF'
 usage: samba-adws run              run the service in the foreground
        samba-adws check            check the installation (imports, directory, routing)
+       samba-adws patch-samba      rebuild Samba so it announces ADWS (what ADAC needs);
+                                   --check, --no-install, --revert, --help
        samba-adws --version
        samba-adws <verb> [...]     the Linux client: naming-context, search, status
                                    (samba-adws <verb> --help for each)
@@ -38,6 +40,14 @@ case "${1:-}" in
     check)
         cd "$PAYLOAD"
         exec /usr/bin/python3 tools/test/test_adws.py
+        ;;
+    patch-samba)
+        # Rebuilds Debian's samba with the CLDAP advertisement patch the
+        # Administrative Center needs; documentation/08-adac.md. The payload
+        # carries the patch and the script at the paths a checkout has, so
+        # the script finds patches/samba/ the same way from either place.
+        shift
+        exec /bin/bash "$PAYLOAD/tools/installation/patch-samba.sh" "$@"
         ;;
     --version|-v)
         printf 'samba-adws %s\n' "$(sed -n 's/^version: *//p' "$PAYLOAD/MODULE.yaml")"

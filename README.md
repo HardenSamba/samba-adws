@@ -240,7 +240,15 @@ reaches the directory. The server logs every request as the signed-in principal.
 1. **The DC must advertise ADWS.** ADAC locates a controller with `DsGetDcName` and the
    `DS_WEB_SERVICE_REQUIRED` flag, and stock Samba never sets the matching `DS_WS` bit in its
    CLDAP answer. The patch in [`patches/samba/`](patches/samba/README.md) adds it, behind
-   `adws:advertise = yes` in `smb.conf`. Check from a joined client:
+   `adws:advertise = yes` in `smb.conf`, and one command on the controller applies it,
+   rebuilding Debian's samba with the patch and verifying the reply:
+
+   ```bash
+   sudo samba-adws patch-samba                 # from the package; from a checkout:
+   sudo tools/installation/patch-samba.sh      #   tools/installation/patch-samba.sh
+   ```
+
+   [08-adac.md](documentation/08-adac.md) is the page for it. Check from a joined client:
 
    ```powershell
    nltest /dsgetdc:samba.local /ws /force     # must succeed, with WS among the Flags
@@ -299,9 +307,10 @@ Get-ADUser -Filter "Department -eq 'QA'" | Set-ADUser -Description 'updated'
    `adws:advertise = yes`, `nltest /dsgetdc:samba.local /ws` returns `1355` and ADAC cannot connect.
    With them, both work (verified 4 September 2026, Samba 4.17.12 on Debian 12). The HardenSamba
    appliance builds the patched Samba in its image (`make samba`), so a controller installed from
-   that image advertises without anyone doing this by hand. Fallbacks without the patch: ADUC
-   (`dsa.msc`, LDAP) for the GUI, PowerShell `-Server` on the CLI. Details:
-   [06-depannage § 7](documentation/06-depannage.md#7-unable-to-find-a-default-server).
+   that image advertises without anyone doing this by hand; on any other Debian controller,
+   `sudo samba-adws patch-samba` does the rebuild ([08-adac.md](documentation/08-adac.md)).
+   Fallbacks without the patch: ADUC (`dsa.msc`, LDAP) for the GUI, PowerShell `-Server` on the
+   CLI. Details: [06-depannage § 7](documentation/06-depannage.md#7-unable-to-find-a-default-server).
 2. **Self-service password change** (`Set-ADAccountPassword`, old → new):
    fails on the Samba side (`Failed to obtain remote address for the LDAP client`). Samba's
    `password_hash` module requires a `remoteAddress` that a local `SamDB` connection cannot
@@ -325,6 +334,8 @@ and binary attributes are returned as raw base64. Details: [01-architecture.md](
 | [04-handlers.md](documentation/04-handlers.md) | Supported SOAP actions and how to add new ones |
 | [05-tests.md](documentation/05-tests.md) | Windows + server test suite, reading the results |
 | [06-depannage.md](documentation/06-depannage.md) | Common errors (Kerberos, empty base DN, SOAP faults) |
+| [07-linux-client.md](documentation/07-linux-client.md) | The supported Python client, from Linux |
+| [08-adac.md](documentation/08-adac.md) | Making the Administrative Center find a Samba controller: the one-command Samba rebuild, the client-side conditions, updates |
 
 For end-to-end validation: [`Test-ADWS-Sovereign.ps1`](tools/test/Test-ADWS-Sovereign.ps1) from the
 Windows workstation (see [05-tests.md](documentation/05-tests.md)).

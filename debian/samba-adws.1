@@ -1,10 +1,12 @@
-.TH SAMBA-ADWS 1 "September 2026" "samba-adws 1.0.0" "HardenSamba"
+.TH SAMBA-ADWS 1 "September 2026" "samba-adws 1.0.1" "HardenSamba"
 .SH NAME
 samba-adws \- Active Directory Web Services for Samba: run, check, or query the service
 .SH SYNOPSIS
 .B samba-adws run
 .br
 .B samba-adws check
+.br
+.BR "samba-adws patch-samba " [ \-\-check | \-\-no-install | \-\-revert ]
 .br
 .B samba-adws \-\-version
 .br
@@ -30,6 +32,22 @@ unit reads. Useful when systemd has reported a failure and not its cause.
 .B check
 Checks the installation: Python imports, the local directory, and the handler
 routing. Prints one line per check and a summary.
+.TP
+.B patch-samba
+Rebuilds Debian's samba source package with the one patch that makes the
+controller announce ADWS in its CLDAP netlogon reply, installs the result at a
+local version, adds "adws:advertise = yes" to smb.conf, restarts samba-ad-dc
+and reads the reply back. The Active Directory Administrative Center, and the
+PowerShell cmdlets used without \-Server, only find controllers that announce,
+and stock Samba never does. Needs root, deb-src lines (added if missing),
+about 4 GB under /var/tmp and tens of minutes.
+.B \-\-check
+reports the state and changes nothing;
+.B \-\-no-install
+builds and verifies only;
+.B \-\-revert
+puts the stock packages back. A Debian security update of samba replaces the
+rebuilt packages; run it again afterwards.
 .TP
 .B \-\-version
 Prints the module version from MODULE.yaml.
@@ -62,6 +80,12 @@ Python path.
 .TP
 .I /var/log/samba-adws/adws.log
 The service's log, in a directory systemd creates for it.
+.TP
+.I /var/lib/samba-adws/samba-patched
+Written by patch-samba: the samba version it last rebuilt and when.
+.TP
+.I /var/tmp/samba-adws-patch/
+Where patch-samba builds; the packages, build.log and install.log stay there.
 .SH AUTHENTICATION
 The client verbs authenticate with Kerberos from the current ticket cache; run
 .B kinit

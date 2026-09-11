@@ -296,7 +296,12 @@ controller advertises now.
 
 ### Fix, and workarounds without it
 
-- **Apply the Samba patch** ([`patches/samba/README.md`](../patches/samba/README.md)), set
+- **One command on the controller**: `sudo samba-adws patch-samba` (from a checkout:
+  `sudo tools/installation/patch-samba.sh`) rebuilds Debian's samba with the patch, installs the
+  result, sets the `smb.conf` line and reads the controller's own netlogon reply back.
+  [08-adac.md](08-adac.md) is its page, including `--check`, `--revert`, and what a Samba
+  security update does to it.
+- **Apply the Samba patch by hand** ([`patches/samba/README.md`](../patches/samba/README.md)), set
   `adws:advertise = yes` in `smb.conf`, restart `samba-ad-dc`, then re-run `nltest ... /ws /force`:
   it must succeed with `WS` among the flags. ADAC and `-Server`-less cmdlets then work. Verified
   4 September 2026: Windows 11 client, Samba 4.17.12 on Debian 12, signed in as a member of

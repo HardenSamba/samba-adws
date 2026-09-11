@@ -13,6 +13,11 @@ Complete index of the project documentation.
 → [07-linux-client.md](07-linux-client.md) for the supported Python API,
 Kerberos requirements, and current action surface.
 
+### I want the Administrative Center (ADAC) to open
+
+→ [08-adac.md](08-adac.md): the controller must announce ADWS, which stock Samba cannot;
+one command rebuilds it with the patch, and the Windows side has two conditions of its own.
+
 ### I want to understand how it is built
 
 → [01-architecture.md](01-architecture.md), then [03-protocole.md](03-protocole.md).
@@ -47,6 +52,7 @@ Kerberos requirements, and current action surface.
 - One-command installation (`git clone` + `sudo tools/installation/install.sh`)
 - Manual startup and systemd service
 - Verification (`Test-NetConnection`, `Get-ADRootDSE`)
+- Making the Administrative Center find the controller (`samba-adws patch-samba`)
 - No virtualenv and no pip (everything through apt)
 - Uninstallation
 
@@ -94,6 +100,13 @@ Kerberos requirements, and current action surface.
 - Public `ADWSClient` and `ADWSClientError` contracts
 - Supported Get-by-DN surface and server-only operations
 - Offline tests and the remaining live validation criterion
+
+### [08-adac.md](08-adac.md)
+- Why ADAC cannot find a stock Samba controller (`DS_SERVER_WEBSERV`, 0x2000)
+- The one-command fix: `samba-adws patch-samba`, step by step, `--check`, `--no-install`, `--revert`
+- Checking it from the controller and from a joined Windows client
+- Opening the console on the client: domain logon, UAC
+- What a Samba security update does, and going back
 
 ---
 
