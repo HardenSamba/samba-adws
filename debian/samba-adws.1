@@ -14,6 +14,10 @@ samba-adws \- Active Directory Web Services for Samba: run, check, or query the 
 .br
 .BI "samba-adws search \-\-server " controller " \-\-base " dn " [" options "]"
 .br
+.BI "samba-adws new-user \-\-server " controller " \-\-parent " dn " \-\-rdn " rdn " \-\-sam " name " [" options "]"
+.br
+.BI "samba-adws set-password \-\-server " controller " \-\-identity " dn
+.br
 .B samba-adws status
 .SH DESCRIPTION
 .B samba-adws
@@ -60,6 +64,25 @@ where a caller starts before it holds any distinguished name.
 Prints one page of the objects under a container, as JSON. See
 .B samba-adws search \-\-help
 for the scope, filter, property and page-size options.
+.TP
+.BI "new-user \-\-server " controller " \-\-parent " dn " \-\-rdn " rdn " \-\-sam " name
+Creates a user account under
+.IR dn ,
+gives it the password read from standard input, then enables it, in that order,
+and prints its distinguished name, objectGUID and the step it reached as JSON.
+A failure after the create leaves the account disabled and says so. See
+.B samba-adws new-user \-\-help
+for the optional name attributes.
+.TP
+.BI "set-password \-\-server " controller " \-\-identity " dn
+Sets the password of the account
+.IR dn
+to the one read from standard input.
+.IP
+Both write verbs read the password from standard input, one line, or without
+echo when standard input is a terminal; neither takes it as an argument. Both
+run as the Kerberos principal in the caller's credential cache, and the
+controller refuses a write that principal has no right to.
 .TP
 .B status
 Prints, as JSON, the module name, its version and the verbs it answers. Opens

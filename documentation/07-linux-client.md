@@ -616,11 +616,40 @@ stdout is left empty on failure deliberately. A consumer that parsed it on a
 non-zero status would be reading a shape this command does not promise, and one
 that did not would find half a page.
 
-### Read only, for now
+### Creating an account, and resetting a password
 
-`search` is the verb `hardensamba-webui#9` and `#20` were blocked on. The write
-verbs exist on `ADWSWriteClient` and are not exposed here yet. The identity
-question that held them up is answered: `#8` binds every request to the Kerberos
-principal in the caller's credential cache, and the server enforces that
-principal's write rights. What is left is the command surface itself, tracked by
-`#16`.
+Two write verbs, for the two things `hardensamba-powershell`'s `New-ADUser` and
+`Set-ADAccountPassword` do. The password is read from stdin, never from an
+argument: one line from a pipe, or typed without echo on a terminal.
+
+```bash
+printf '%s\n' "$PASSWORD" | samba-adws new-user --server dc.example.test \
+    --parent "OU=Staff,DC=example,DC=test" --rdn "CN=Marie Dupont" --sam m.dupont \
+    --upn m.dupont@example.test --given Marie --surname Dupont --display "Marie Dupont"
+```
+
+```json
+{"dn":"CN=Marie Dupont,OU=Staff,DC=example,DC=test","objectGUID":"...","reached":"usable"}
+```
+
+`new-user` runs `create_usable_account`: created disabled, given the password,
+then enabled. A refusal after the create names the account and the step it
+reached (`reached: created` or `reached: password-set`) in the reason on stderr,
+because the object exists, disabled, and the next attempt must not create a
+second one beside it.
+
+```bash
+printf '%s\n' "$PASSWORD" | samba-adws set-password --server dc.example.test \
+    --identity "CN=Marie Dupont,OU=Staff,DC=example,DC=test"
+```
+
+```json
+{"dn":"CN=Marie Dupont,OU=Staff,DC=example,DC=test","passwordSet":true}
+```
+
+Both run as the principal in the caller's credential cache (`#8`): the server
+refuses a write that principal has no right to.
+
+**No delete, move or rename.** Those exist on `ADWSWriteClient`, and are not
+exposed here: a destructive verb reached from a shell needs a confirmation
+story of its own, and nobody has asked for one.

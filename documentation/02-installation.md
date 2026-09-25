@@ -112,7 +112,7 @@ is invisible until a machine installs the package:
 |---|---|
 | the service and the client | `/usr/share/samba-adws/` (a payload, not the Python path: the tree is two sibling top-level packages, `src` and `classes`, and neither name may be claimed in a shared `site-packages`) |
 | the unit | `/lib/systemd/system/samba-adws.service` |
-| the command | `/usr/bin/samba-adws` — `run`, `check`, `patch-samba`, `--version`, and every client verb (`naming-context`, `search`, `status`) |
+| the command | `/usr/bin/samba-adws` — `run`, `check`, `patch-samba`, `--version`, and every client verb (`naming-context`, `search`, `status`, `new-user`, `set-password`) |
 | the Samba patch and the script that applies it | `/usr/share/samba-adws/patches/samba/` and `/usr/share/samba-adws/tools/installation/patch-samba.sh` (§7) |
 | the configuration | `/etc/hardensamba/samba-adws/samba-adws.conf`, a conffile (§3.1) |
 | the log | `/var/log/samba-adws/adws.log`, in a directory systemd creates |
