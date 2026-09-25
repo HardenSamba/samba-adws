@@ -15,16 +15,11 @@ and a console never knows a distinguished name until something published one.
 See `cli_naming` for why it is a verb of its own rather than a field of
 `status`. samba-adws#28.
 
-**Read only, for now.** `search` is the verb `hardensamba-webui#9` and
-`samba-adws#20` were blocked on. The write verbs exist on `ADWSWriteClient` as
-of `samba-adws#16` and are deliberately not exposed here. The reason is no
-longer the one this paragraph used to give: `samba-adws#8` has landed, so a
-request runs as the principal that authenticated it and Samba refuses a write
-that principal has no right to. What is left is a design question rather than a
-privilege one — a destructive verb reached from a shell needs a confirmation
-story of its own, and the consumers asking for this command
-(`hardensamba-webui`) drive writes through the Python client, where a refusal
-carries the object it names.
+**Two write verbs, and no destructive one.** `new-user` and `set-password`
+are in `cli_write`; see there for why those two and not a delete. A request
+runs as the principal that authenticated it (`samba-adws#8`), so Samba refuses a
+write that principal has no right to. A delete, a move or a rename reached from
+a shell still needs a confirmation story of its own, and is not exposed.
 
 **`status` exists so that a consumer can ask whether this command answers.**
 It opens nothing. `hardensamba-webui` probed with `search --help`, chosen
@@ -37,7 +32,9 @@ perfectly therefore read as installed and not answering. samba-adws#25.
 import argparse
 from typing import Callable, Dict, List, Optional
 
-from samba_adws import cli_format, cli_naming, cli_output, cli_search, cli_status
+from samba_adws import (
+    cli_format, cli_naming, cli_output, cli_search, cli_status, cli_write,
+)
 from samba_adws.client import ADWSClient
 from samba_adws.errors import ADWSClientError
 from samba_adws.search_client import ADWSSearchClient
@@ -70,6 +67,7 @@ def parser() -> argparse.ArgumentParser:
     add_search(verbs.add_parser("search", help="one page of objects in a container",
                                 parents=[common]))
     verbs.add_parser("status", help="whether this command answers", parents=[common])
+    cli_write.add_parsers(verbs, common, DEFAULT_PORT)
     return root
 
 
@@ -105,6 +103,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     options = parser().parse_args(argv)
     connected: Dict[str, Callable[[argparse.Namespace], int]] = {
         "naming-context": naming_context, "search": search,
+        "new-user": cli_write.new_user, "set-password": cli_write.set_password,
     }
     if options.verb in connected:
         return connected[options.verb](options)
