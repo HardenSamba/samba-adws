@@ -14,18 +14,17 @@ LDB_CONTROL_BY_OID = {
     "1.2.840.113556.1.4.805": "tree_delete",
     "1.2.840.113556.1.4.521": "crossdom_move_target",
     "1.2.840.113556.1.4.417": "show_deleted",
-    "1.2.840.113556.1.4.1340": "show_recycled",
-    "1.2.840.113556.1.4.2026": "show_deactivated_link",
     "1.2.840.113556.1.4.1413": "permissive_modify",
     "1.2.840.113556.1.4.1339": "domain_scope",
-    "1.2.840.113556.1.4.2065": "managedBy",
+    "1.2.840.113556.1.4.2065": "show_deactivated_link",
     "1.2.840.113556.1.4.1504": "asq",
-    "1.2.840.113556.1.4.1948": "search_notification",
     "1.2.840.113556.1.4.2064": "show_recycled",
     "2.16.840.1.113730.3.4.2": "manageDSAIT",
     "1.2.840.113556.1.4.1338": "verify_name",
     "1.2.840.113556.1.4.841": "dirsync",
 }
+
+VISIBILITY_CONTROLS = frozenset(("show_deleted", "show_recycled", "show_deactivated_link"))
 
 
 class ControlsParser:
@@ -47,6 +46,13 @@ class ControlsParser:
             if translated:
                 out.append(translated)
         return out
+
+    # Builds a single-object read's controls: the fixed SD read plus the
+    # client's deleted/recycled/deactivated-link visibility controls.
+    @staticmethod
+    def for_object_read(client: Optional[List[str]]) -> List[str]:
+        shown = [c for c in client or [] if c.split(":", 1)[0] in VISIBILITY_CONTROLS]
+        return ["sd_flags:1:0"] + shown
 
     @staticmethod
     def _read_one(elem: Any) -> Optional[Dict[str, Any]]:

@@ -72,7 +72,8 @@ class EnumerateHandler(BaseHandler):
         scope = LDB_SCOPES.get(query.scope_name, ldb.SCOPE_SUBTREE)
         self.logger.info(
             f"[ENUMERATE] base='{query.base_dn}' filter={query.search_filter} "
-            f"scope={query.scope_name}(ldb:{scope}) attrs={query.attributes}"
+            f"scope={query.scope_name}(ldb:{scope}) attrs={query.attributes} "
+            f"controls={controls}"
         )
         try:
             results = self.db.db.search(
