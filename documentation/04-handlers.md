@@ -34,7 +34,7 @@ One handler = one file in [classes/handlers/](../classes/handlers/). It processe
 | SOAP action | Handler | Description |
 |---|---|---|
 | `…/enumeration/Enumerate` | [`enumerate.py`](../classes/handlers/enumerate.py) — `EnumerateHandler` | Starts an enumeration session, runs `samdb.search()`, stores the results under a UUID |
-| `…/enumeration/Pull` | [`pull.py`](../classes/handlers/pull.py) — `PullHandler` | Pulls a batch of objects from the UUID context |
+| `…/enumeration/Pull` | [`pull.py`](../classes/handlers/pull.py) — `PullHandler` | Pulls a batch of objects from the UUID context; re-runs the search first when the first Pull brings visibility controls (`show_deleted`, `show_recycled`, `show_deactivated_link`) the Enumerate did not carry, since [MS-WSPELD] puts enumeration controls on Pull |
 | `…/enumeration/Release` | [`release.py`](../classes/handlers/release.py) — `ReleaseHandler` | Releases the context on the server side |
 | `…/enumeration/Renew` | [`renew.py`](../classes/handlers/renew.py) — `RenewHandler` | Extends the context expiration |
 | `…/enumeration/GetStatus` | [`get_status.py`](../classes/handlers/get_status.py) — `GetStatusHandler` | Context status and expiration |

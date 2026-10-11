@@ -1077,7 +1077,8 @@ Recensement exhaustif des points où un contrôle atteint LDB :
 
 | Handler | Contrôles passés à LDB | Origine |
 |---|---|---|
-| `EnumerateHandler` | `context.ldap_controls or None` | parsés (`enumerate.py:53`) |
+| `EnumerateHandler` | `context.ldap_controls or None` (portés par `EnumerateQuery.controls`) | parsés (`enumerate.py`) |
+| `PullHandler` | contrôles de l'`Enumerate` + contrôles de visibilité du `Pull` | `pull_controls.pull_query` |
 | `GetHandler` (RootDSE) | `["sd_flags:1:0"]` en dur | `get.py:120` |
 | `GetHandler` (objet) | `sd_flags:1:0` + contrôles de visibilité du client | `ControlsParser.for_object_read` |
 | `DeleteHandler` | `["tree_delete:1"]` si détecté | `delete.py:40-44` |
@@ -1094,6 +1095,17 @@ du descripteur de sécurité — précisément l'intention : ne pas en payer le
 coût de lecture, et ne pas déclencher le contrôle d'accès sur la SACL, qui
 exige `SeSecurityPrivilege`. Deux conséquences directes :
 
+- **Les contrôles d'une énumération voyagent sur le `Pull`, pas sur
+ l'`Enumerate`** ([MS-WSPELD] §2.2.3.1 place `ad:controls` dans `wsen:Pull`).
+ Constat sur le fil : `Get-ADObject -SearchBase "CN=Deleted Objects,…"
+ -IncludeDeletedObjects` envoie un `Enumerate` sans contrôle, puis un `Pull`
+ qui porte `show_deleted`. Le serveur exécutant la recherche dès
+ l'`Enumerate`, le résultat était vide. Désormais, si le **premier** `Pull`
+ apporte des contrôles de visibilité absents de la recherche mise en cache,
+ `PullHandler` relance la recherche avec ces contrôles ajoutés à ceux de
+ l'`Enumerate` (`classes/enumeration/pull_controls.py`,
+ `tests/unit/test_pull_controls.py`). Les autres contrôles du `Pull` restent
+ ignorés, et aucun `Pull` suivant ne relance la recherche.
 - **`EnumerateHandler` transmet tous les contrôles parsés** (donc aussi
  `SearchHandler`, qui délègue). **Le `Get` unitaire d'un objet** garde son
  `sd_flags:1:0` et y ajoute **uniquement** les contrôles de visibilité du

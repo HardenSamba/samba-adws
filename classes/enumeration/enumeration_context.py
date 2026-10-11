@@ -14,6 +14,7 @@ class EnumerationContext:
     cached_results: List[Any] = field(default_factory=list)
     result_index: int = 0
     session_id: Optional[str] = None
+    query: Optional[Any] = None
 
     @property
     def is_expired(self) -> bool:

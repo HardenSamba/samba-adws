@@ -6,7 +6,9 @@ from typing import Any, Dict, List
 from src.enumeration.enumeration import get_enumeration_registry
 
 from classes.enumeration.enumeration_context import EnumerationContext
+from classes.enumeration.pull_controls import pull_query
 from classes.handlers.base import BaseHandler
+from classes.handlers.enumerate import EnumerateHandler
 from classes.parsing.context import RequestContext
 
 PULL_RESPONSE_TEMPLATE = (
@@ -36,7 +38,8 @@ PULL_RESPONSE_TEMPLATE = (
 class PullHandler(BaseHandler):
 
     # Answers with the next batch and the way to continue, or with the same
-    # invalid-context fault its WS-Enumeration siblings return.
+    # invalid-context fault its WS-Enumeration siblings return. Visibility
+    # controls first seen on the Pull re-run the search before the first batch.
     def handle(self, context: RequestContext) -> str:
         self.log_request(context)
         enum_context_id = context.enumeration_context
@@ -50,6 +53,11 @@ class PullHandler(BaseHandler):
             return str(
                 self.faults.invalid_enumeration_context(context.message_id, enum_context_id)
             )
+        rerun = pull_query(enum_context, context.ldap_controls)
+        if rerun is not None:
+            searcher = EnumerateHandler(self.logger, self.db.session_info)
+            found = list(searcher.search(rerun))[:registry.MAX_RESULTS_PER_CONTEXT]
+            enum_context.cached_results, enum_context.query = found, rerun
         batch: List[Any] = enum_context.get_next_batch(context.max_elements or 100)
         return self._build_pull_response(context, enum_context, batch)
 
