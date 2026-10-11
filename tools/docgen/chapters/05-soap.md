@@ -971,7 +971,7 @@ débogue un contrôle qui « ne fait rien ».
 
 ## Table exhaustive des OID reconnus
 
-Les dix-neuf entrées de `LDB_CONTROL_BY_OID`
+Les seize entrées de `LDB_CONTROL_BY_OID`
 (`classes/parsing/controls_parser.py:8-28`), dans l'ordre du fichier. La
 colonne « Nom LDB émis » est la chaîne effectivement passée à Samba ; la
 colonne « Nom [MS-ADTS] » est le nom canonique de l'OID.
@@ -986,37 +986,32 @@ colonne « Nom [MS-ADTS] » est le nom canonique de l'OID.
 | `1.2.840.113556.1.4.805` | `tree_delete` | LDAP_SERVER_TREE_DELETE | conforme |
 | `1.2.840.113556.1.4.521` | `crossdom_move_target` | LDAP_SERVER_CROSSDOM_MOVE_TARGET | conforme |
 | `1.2.840.113556.1.4.417` | `show_deleted` | LDAP_SERVER_SHOW_DELETED | conforme |
-| `1.2.840.113556.1.4.1340` | `show_recycled` | LDAP_SERVER_SEARCH_OPTIONS | **erroné** |
-| `1.2.840.113556.1.4.2026` | `show_deactivated_link` | LDAP_SERVER_DN_INPUT | **erroné** |
 | `1.2.840.113556.1.4.1413` | `permissive_modify` | LDAP_SERVER_PERMISSIVE_MODIFY | conforme |
 | `1.2.840.113556.1.4.1339` | `domain_scope` | LDAP_SERVER_DOMAIN_SCOPE | conforme |
-| `1.2.840.113556.1.4.2065` | `managedBy` | LDAP_SERVER_SHOW_DEACTIVATED_LINK | **erroné** |
+| `1.2.840.113556.1.4.2065` | `show_deactivated_link` | LDAP_SERVER_SHOW_DEACTIVATED_LINK | conforme |
 | `1.2.840.113556.1.4.1504` | `asq` | LDAP_SERVER_ASQ | conforme |
-| `1.2.840.113556.1.4.1948` | `search_notification` | LDAP_SERVER_RANGE_RETRIEVAL_NOERR | **erroné** |
 | `1.2.840.113556.1.4.2064` | `show_recycled` | LDAP_SERVER_SHOW_RECYCLED | conforme |
 | `2.16.840.1.113730.3.4.2` | `manageDSAIT` | ManageDsaIT (RFC 3296) | conforme |
 | `1.2.840.113556.1.4.1338` | `verify_name` | LDAP_SERVER_VERIFY_NAME | conforme |
 | `1.2.840.113556.1.4.841` | `dirsync` | LDAP_SERVER_DIRSYNC | conforme |
 
-> **Quatre mappings à corriger.** Ils ne sont pas anodins : le nom LDB est
-> passé littéralement à `SamDB.search(controls=…)`, et un nom que le parseur
-> de contrôles de Samba ne connaît pas fait **échouer la recherche entière**,
-> pas seulement le contrôle. `managedBy` et `search_notification` ne sont pas
-> des noms de contrôle `ldb` — le premier est un nom d'attribut d'annuaire,
-> le second n'existe pas.
-
-Correctif proposé, OID par OID :
-
-| OID | Nom LDB actuel | Nom LDB attendu |
-|---|---|---|
-| `…1.4.1340` | `show_recycled` | `search_options` |
-| `…1.4.2026` | `show_deactivated_link` | pas d'équivalent `ldb` direct |
-| `…1.4.2065` | `managedBy` | `show_deactivated_link` |
-| `…1.4.1948` | `search_notification` | pas d'équivalent `ldb` direct |
-
-À noter que `show_recycled` est bien un nom `ldb` valide, mais associé au
-seul OID `…1.4.2064`, déjà présent dans la table : `…1.4.1340` en est un
-doublon qui, en prime, détourne l'OID de `search_options`.
+> **Mappings corrigés.** Le nom LDB est passé littéralement à
+> `SamDB.search(controls=…)`, et un nom que le parseur de contrôles de Samba
+> ne connaît pas fait **échouer la recherche entière**. Quatre entrées
+> étaient fausses ; elles ont été corrigées ainsi :
+>
+> | OID | Ancien nom LDB | Traitement actuel |
+> |---|---|---|
+> | `…1.4.2065` | `managedBy` | `show_deactivated_link` |
+> | `…1.4.1340` | `show_recycled` | retiré (LDAP_SERVER_SEARCH_OPTIONS : valeur BER que `_translate` ne sait pas convertir en `search_options`) |
+> | `…1.4.2026` | `show_deactivated_link` | retiré (LDAP_SERVER_DN_INPUT, sans équivalent `ldb`) |
+> | `…1.4.1948` | `search_notification` | retiré (LDAP_SERVER_RANGE_RETRIEVAL_NOERR, sans équivalent `ldb`) |
+>
+> Un OID retiré est désormais ignoré comme tout OID absent de la table.
+> Les trois contrôles de visibilité qu'envoie `Get-ADObject
+> -IncludeDeletedObjects` (`…1.4.417`, `…1.4.2064`, `…1.4.2065`) se
+> traduisent tous en noms `ldb` valides
+> (`tests/unit/test_controls_parser.py`).
 
 Autres observations à porter au dossier :
 
@@ -1082,9 +1077,10 @@ Recensement exhaustif des points où un contrôle atteint LDB :
 
 | Handler | Contrôles passés à LDB | Origine |
 |---|---|---|
-| `EnumerateHandler` | `context.ldap_controls or None` | parsés (`enumerate.py:53`) |
+| `EnumerateHandler` | `context.ldap_controls or None` (portés par `EnumerateQuery.controls`) | parsés (`enumerate.py`) |
+| `PullHandler` | contrôles de l'`Enumerate` + contrôles de visibilité du `Pull` | `pull_controls.pull_query` |
 | `GetHandler` (RootDSE) | `["sd_flags:1:0"]` en dur | `get.py:120` |
-| `GetHandler` (objet) | `["sd_flags:1:0"]` en dur | `get.py:220` |
+| `GetHandler` (objet) | `sd_flags:1:0` + contrôles de visibilité du client | `ControlsParser.for_object_read` |
 | `DeleteHandler` | `["tree_delete:1"]` si détecté | `delete.py:40-44` |
 | `CreateHandler` | aucun (`db.add(msg)`) | `create.py:35` |
 | `ModifyHandler` | aucun (`db.modify(msg)`) | `modify.py:70` |
@@ -1099,10 +1095,28 @@ du descripteur de sécurité — précisément l'intention : ne pas en payer le
 coût de lecture, et ne pas déclencher le contrôle d'accès sur la SACL, qui
 exige `SeSecurityPrivilege`. Deux conséquences directes :
 
-- **`context.ldap_controls` n'est consommé que par `EnumerateHandler`**
- (donc aussi par `SearchHandler`, qui délègue). Un `show_deleted` envoyé
- sur un `Get` unitaire est parsé, rangé dans le contexte… et jamais
- utilisé — le `Get` écrase la liste par son `sd_flags:1:0` codé en dur.
+- **Les contrôles d'une énumération voyagent sur le `Pull`, pas sur
+ l'`Enumerate`** ([MS-WSPELD] §2.2.3.1 place `ad:controls` dans `wsen:Pull`).
+ Constat sur le fil : `Get-ADObject -SearchBase "CN=Deleted Objects,…"
+ -IncludeDeletedObjects` envoie un `Enumerate` sans contrôle, puis un `Pull`
+ qui porte `show_deleted`. Le serveur exécutant la recherche dès
+ l'`Enumerate`, le résultat était vide. Désormais, si le **premier** `Pull`
+ apporte des contrôles de visibilité absents de la recherche mise en cache,
+ `PullHandler` relance la recherche avec ces contrôles ajoutés à ceux de
+ l'`Enumerate` (`classes/enumeration/pull_controls.py`,
+ `tests/unit/test_pull_controls.py`). Les autres contrôles du `Pull` restent
+ ignorés, et aucun `Pull` suivant ne relance la recherche.
+- **`EnumerateHandler` transmet tous les contrôles parsés** (donc aussi
+ `SearchHandler`, qui délègue). **Le `Get` unitaire d'un objet** garde son
+ `sd_flags:1:0` et y ajoute **uniquement** les contrôles de visibilité du
+ client (`show_deleted`, `show_recycled`, `show_deactivated_link`), via
+ `ControlsParser.for_object_read`. Sans cela, `Get-ADObject -Identity
+ "CN=Deleted Objects,…" -IncludeDeletedObjects` répondait « Object not
+ found » : le conteneur porte `isDeleted: TRUE` et Samba le masque sans
+ `show_deleted`, ce qui empêchait aussi ADAC d'afficher le nœud Deleted
+ Objects. Les autres contrôles du client restent ignorés sur le `Get`, car
+ leur valeur BER ne survit pas à `_translate` (voir la limite structurelle
+ ci-dessus).
 - **`DeleteHandler` ne passe pas par `ControlsParser`.** Il cherche la
  chaîne littérale `1.2.840.113556.1.4.805` dans le XML brut
  (`delete.py:42`) et, si elle y figure, envoie `tree_delete:1`. C'est

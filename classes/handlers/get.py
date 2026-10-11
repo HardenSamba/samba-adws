@@ -7,6 +7,7 @@ import ldb
 
 from classes.handlers.base import BaseHandler
 from classes.parsing.context import RequestContext
+from classes.parsing.controls_parser import ControlsParser
 
 # RootDSE attributes Samba returns that real AD does NOT expose. The Windows
 # AD client looks attribute names up in its hardcoded RootDSE syntax table
@@ -217,7 +218,7 @@ class GetHandler(BaseHandler):
             for dn in dns_to_try:
                 try:
                     search_expr = "(objectClass=*)"
-                    controls = ["sd_flags:1:0"]
+                    controls = ControlsParser.for_object_read(context.ldap_controls)
 
                     from classes.serialization.constructed_attrs import ConstructedAttrs
                     base_attrs: List[str] = ['*']

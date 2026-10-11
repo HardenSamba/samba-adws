@@ -1,7 +1,7 @@
 """Enumerate handler - List/Enumerate AD objects"""
 import html
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import ldb
 from src.enumeration.enumeration import get_enumeration_registry
@@ -47,7 +47,7 @@ class EnumerateHandler(BaseHandler):
     def handle(self, context: RequestContext) -> str:
         self.log_request(context)
         query = build_query(context, self._base_dn(context))
-        results = self._search(query, context.ldap_controls or None)
+        results = self.search(query)
         context_id = self._cache(query, results, context.message_id)
         expires = (datetime.utcnow() + timedelta(hours=1)).isoformat() + "Z"
         return self._build_enumerate_response(context, context_id, expires)
@@ -68,11 +68,12 @@ class EnumerateHandler(BaseHandler):
 
     # Runs the query against the directory, re-raising any refusal as the
     # typed fault the dispatcher knows how to answer a client with.
-    def _search(self, query: EnumerateQuery, controls: Optional[List[str]]) -> Any:
+    def search(self, query: EnumerateQuery) -> Any:
         scope = LDB_SCOPES.get(query.scope_name, ldb.SCOPE_SUBTREE)
         self.logger.info(
             f"[ENUMERATE] base='{query.base_dn}' filter={query.search_filter} "
-            f"scope={query.scope_name}(ldb:{scope}) attrs={query.attributes}"
+            f"scope={query.scope_name}(ldb:{scope}) attrs={query.attributes} "
+            f"controls={query.controls}"
         )
         try:
             results = self.db.db.search(
@@ -80,7 +81,7 @@ class EnumerateHandler(BaseHandler):
                 scope=scope,
                 expression=query.search_filter,
                 attrs=query.attributes,
-                controls=controls,
+                controls=query.controls,
             )
         except Exception as e:
             self.logger.error(f"[ENUMERATE] Search failed: {str(e)}")
@@ -105,6 +106,7 @@ class EnumerateHandler(BaseHandler):
             self.logger.warning(f"[ENUMERATE] Truncating {len(materialized)} -> {limit}")
             materialized = materialized[:limit]
         enum_context.cached_results = materialized
+        enum_context.query = query
         return context_id
 
     # Renders the EnumerateResponse carrying the context identifier and the

@@ -1,6 +1,6 @@
 """The directory search one Enumerate request asks for."""
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from classes.parsing.context import RequestContext
 from classes.parsing.filter_parser import FilterParser
@@ -14,13 +14,15 @@ DEFAULT_SCOPE = "Subtree"
 # handler never has to reconcile the scope and the projection twice. The scope
 # stays the word the client sent: turning it into an ldb constant belongs to
 # the handler that talks to LDB, and leaving it out keeps this module free of
-# the directory bindings, so the projection rule is testable off a DC.
+# the directory bindings, so the projection rule is testable off a DC. The LDB
+# controls start as the Enumerate's and may be replaced by those of the Pull.
 @dataclass(frozen=True)
 class EnumerateQuery:
     base_dn: str
     search_filter: str
     scope_name: str
     attributes: List[str]
+    controls: Optional[List[str]] = None
 
 
 # Normalises the client filter (e.g. wraps bare NOT operands); raw on failure.
@@ -41,4 +43,6 @@ def build_query(context: RequestContext, base_dn: str) -> EnumerateQuery:
         context.selection_attributes, scope_name == BASE_SCOPE
     )
     search_filter = normalize_filter(context.ldap_filter or "(objectClass=*)")
-    return EnumerateQuery(base_dn, search_filter, scope_name, attributes)
+    return EnumerateQuery(
+        base_dn, search_filter, scope_name, attributes, context.ldap_controls or None
+    )
