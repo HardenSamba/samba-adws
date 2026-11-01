@@ -9,7 +9,7 @@ One handler = one file in [classes/handlers/](../classes/handlers/). It processe
 | SOAP action | Handler | Typical PowerShell cmdlet |
 |---|---|---|
 | `…/transfer/Get` | [`get.py`](../classes/handlers/get.py) — `GetHandler` | `Get-ADUser`, `Get-ADRootDSE`, `Get-ADObject` |
-| `…/transfer/Put` | [`transfer.py`](../classes/handlers/transfer.py) — `TransferHandler` | `Set-ADUser` (DN-based form) |
+| `…/transfer/Put` | [`transfer.py`](../classes/handlers/transfer.py) — `TransferHandler` | `Set-ADUser` (DN-based form), `Rename-ADObject`, `Move-ADObject`, `Restore-ADObject` |
 | `…/transfer/Delete` | [`transfer.py`](../classes/handlers/transfer.py) | `Remove-ADUser` |
 | `…/transfer/Create` | [`crud.py`](../classes/handlers/crud.py) — `CRUDHandler` | `New-ADUser`, `New-ADGroup` |
 
@@ -126,14 +126,14 @@ relate to its request too.
 | `GetADForest` | [`get_ad_forest.py`](../classes/handlers/get_ad_forest.py) | `Get-ADForest` |
 | `GetVersion` | [`get_version.py`](../classes/handlers/get_version.py) | ADWS version number |
 | `MoveADOperationMasterRole` | [`move_operation_master_role.py`](../classes/handlers/move_operation_master_role.py) | `Move-ADDirectoryServerOperationMasterRole` (FSMO transfer/seize) |
-| `ChangeOptionalFeature` | [`change_optional_feature.py`](../classes/handlers/change_optional_feature.py) | `Enable-ADOptionalFeature` |
+| `ChangeOptionalFeature` | [`change_optional_feature.py`](../classes/handlers/change_optional_feature.py) | `Enable-ADOptionalFeature` (and the console's *Enable Recycle Bin*): a rootDSE `enableOptionalFeature` modify, `<scope DN>:<feature GUID>`, as the requester; `Disable-ADOptionalFeature` is refused with a fault, since AD cannot disable the Recycle Bin either |
 
 ### Internal CRUD
 
 | File | Role |
 |---|---|
 | [`create.py`](../classes/handlers/create.py) — `CreateHandler` | Creation logic used by `CRUDHandler` |
-| [`modify.py`](../classes/handlers/modify.py) — `ModifyHandler` | Modification logic used by `TransferHandler` (Put) |
+| [`modify.py`](../classes/handlers/modify.py) — `ModifyHandler` | Modification logic used by `TransferHandler` (Put). A Put removing `isDeleted` is a restore and goes to [`undelete_request.py`](../classes/directory/undelete_request.py) — `UndeleteRequest` (one modify: `isDeleted` removed, `distinguishedName` replaced, under `show_deleted`) |
 | [`delete.py`](../classes/handlers/delete.py) — `DeleteHandler` | Deletion logic used by `TransferHandler` (Delete) |
 
 ## Routing

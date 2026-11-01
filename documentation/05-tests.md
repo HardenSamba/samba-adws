@@ -128,10 +128,15 @@ and a fault has to relate to its request too. The case list is derived from
 `tests/dc/handler_actions.py`, so registering or removing a handler moves it
 without anyone having to recount the cases here.
 
-One file in `tests/dc/` drives no handler: `test_member_write_flags.py` pins the
-LDB flags a group-membership `Put` ends up applying. It needs `ldb`, so it
-carries the `dc` marker like the rest of level 1 even though it never builds a
-`RequestContext`.
+Two files in `tests/dc/` drive no handler. `test_member_write_flags.py` pins the
+LDB flags a group-membership `Put` ends up applying. `test_undelete_request.py`
+pins the restore of a deleted object (`Restore-ADObject`, the console's
+*Restore* and *Restore To…*): it provisions a throw-away domain in a temporary
+directory, so it needs the Samba bindings but neither a running controller nor
+the domain of the machine, and checks the three ways a `Put` names the new
+place (nothing, the rename attributes, `distinguishedName`). Both need `ldb`, so
+they carry the `dc` marker like the rest of level 1 even though they never build
+a `RequestContext`.
 
 This replaces `tools/test/test_handlers.py`, whose three checks moved here. That
 script took a `reg` argument that pytest read as a fixture, so its three checks
@@ -269,7 +274,10 @@ WS-Addressing namespace (`wsa`, not `wst`), fixed in `handlers/create.py`.
 
 **Other parity fixes.** `Rename-ADObject`/`Move-ADObject` arrive as a
 Put modifying `relativeDistinguishedName`/`container-hierarchy-parent`, handled
-as an LDB modrdn (`db.rename`) in `handlers/modify.py`. Recursive deletion
+as an LDB modrdn (`db.rename`) in `handlers/modify.py`. A Put that also removes
+`isDeleted` is a restore, not a rename: it becomes the single undelete modify
+of `directory/undelete_request.py` (see
+[08-adac § 8](08-adac.md#8-deleted-objects-and-the-recycle-bin)). Recursive deletion
 (`Remove-AD* -Recursive`) honours the tree-delete control in
 `handlers/delete.py`. Filters with a bare NOT operand (`(!attr=val)`, sent
 by `Search-ADAccount`, tolerated by AD but rejected by ldb) are normalised to

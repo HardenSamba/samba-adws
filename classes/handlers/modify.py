@@ -4,20 +4,20 @@ import ldb
 from src.soap.namespaces import WST
 
 from classes.directory.ldap_attr_builder import LdapAttrBuilder
+from classes.directory.undelete_request import RENAME_KEYS as _RENAME_KEYS
+from classes.directory.undelete_request import UndeleteRequest
 from classes.handlers.base import BaseHandler
 from classes.parsing.body_parser import BodyParser
 from classes.parsing.context import RequestContext
 
-# A Put changing these expresses a rename/move (modrdn), not an attribute edit.
-_RENAME_KEYS = ("relativedistinguishedname", "container-hierarchy-parent")
 
-
-# Handles WS-Transfer Put: object renames/moves plus ordinary attribute modifies.
+# Handles WS-Transfer Put: restores of deleted objects (Restore-ADObject),
+# object renames/moves and ordinary attribute modifies.
 class ModifyHandler(BaseHandler):
 
     REPLY_ACTION = f"{WST}/PutResponse"
 
-    # Applies any rename/move first, then the remaining attribute changes.
+    # Restores a deleted object, or applies a rename/move then the attribute changes.
     def handle(self, context: RequestContext) -> str:
         self.log_request(context)
         dn = context.object_reference
@@ -26,7 +26,12 @@ class ModifyHandler(BaseHandler):
                 context.message_id, "Missing target DN", "InvalidRequest"
             ))
         try:
-            dn, attrs = self._apply_rename(dn, self._read_entries(context))
+            entries = self._read_entries(context)
+            if UndeleteRequest.is_undelete(entries):
+                restored = UndeleteRequest(self.db.db, context.ldap_controls).restore(dn, entries)
+                self.logger.info(f"[MODIFY] Restored {dn} -> {restored}")
+                return self._success(context)
+            dn, attrs = self._apply_rename(dn, entries)
             self._modify_attrs(dn, attrs)
             return self._success(context)
         except Exception as e:

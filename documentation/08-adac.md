@@ -226,3 +226,45 @@ tcp/9389 for `-Server` clients.
   found: the client's DNS does not resolve the domain's SRV records to this controller, or a
   firewall drops tcp/9389. [06-depannage § 7](06-depannage.md#7-unable-to-find-a-default-server)
   walks the ladder from the bottom.
+
+## 8. Deleted objects and the Recycle Bin
+
+The console shows the *Deleted Objects* container, restores what is in it (*Restore*, *Restore
+To…*) and enables the Recycle Bin (*Enable Recycle Bin…* on the domain node). Each of the three
+needs the module and the controller to agree.
+
+**Listing.** The console asks for deleted objects with the `show_deleted` and `show_recycled`
+controls, on a `Get` and on the `Pull` of an enumeration (not on the `Enumerate`: [MS-WSPELD]
+2.2.3.1 puts enumeration controls on `Pull`). The module forwards both to Samba
+([`get.py`](../classes/handlers/get.py), [`pull_controls.py`](../classes/enumeration/pull_controls.py)).
+
+**Restoring.** A restore is a `Put` on the deleted object that removes `isDeleted`. The module
+turns it into the one modify a directory takes for an undelete ([MS-ADTS] 3.1.1.5.3.7.2):
+`isDeleted` removed and `distinguishedName` replaced, under `show_deleted`
+([`undelete_request.py`](../classes/directory/undelete_request.py)). The new place is, in this
+order, the `distinguishedName` the `Put` carries, the `relativeDistinguishedName` /
+`container-hierarchy-parent` it carries, or `msDS-LastKnownRDN` under `lastKnownParent` (the
+plain *Restore*). Any other attribute of the same `Put` is written by the same modify. Before
+this, the `Put` went down the rename path: the module renamed the deleted object first, which
+the directory refuses, and the restore failed.
+
+> Deduction, not capture: which of the three forms the console and `Restore-ADObject` send was
+> not observed on the wire. The module accepts all three; a capture of the console's `Put`
+> would settle it.
+
+**What the controller must do.** Stock Samba reanimates a tombstone, but once the Recycle Bin is
+enabled it fails to restore (it removes an `isRecycled` that a deleted object does not carry,
+`noSuchAttribute`) and it strips the attributes Windows keeps. The HardenSamba branch
+`_Harden-Box-Multi-domains-supports-phase4` with `harden:recycle bin = yes` in `smb.conf`
+behaves as Windows does: a restored object keeps its attributes and links, a recycled object is
+refused, a missing parent is refused with `ERROR_DS_NO_PARENT_OBJECT`.
+
+**Enabling the Recycle Bin.** `ChangeOptionalFeature` writes `enableOptionalFeature`
+(`<CN=Partitions DN>:766ddcd8-acd0-445e-f3b9-a7f9b6744f2a`) on the rootDSE as the account that
+asked ([`change_optional_feature.py`](../classes/handlers/change_optional_feature.py)); the
+directory checks the right (*Manage Optional Features*, Enterprise Admins) and the forest
+functional level (2008 R2). Stock Samba refuses it for any account but the local system one
+(*msDS-EnabledFeature can only be modified as system*), so the console shows a fault: enable it
+on the controller instead, with `ldbmodify -H /var/lib/samba/private/sam.ldb` and that
+rootDSE change. With `harden:recycle bin = yes` the console's own button works. Disabling is
+refused, as on Windows.
